@@ -237,6 +237,8 @@ def _set_x11_title(pid: int, title: str) -> bool:
     x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
     x11.XDefaultRootWindow.restype = ctypes.c_ulong
     x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+    x11.XCloseDisplay.restype = ctypes.c_int
+    x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
 
     display = x11.XOpenDisplay(None)
     if not display:
