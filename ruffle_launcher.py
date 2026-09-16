@@ -26,7 +26,7 @@ import time
 
 # Application branding (see README / www.epicalyx.org).
 APP_NAME = "Moglin Bot"
-WEBSITE = "www.epicalyx.org"
+WEBSITE = "Epicalyx"
 WINDOW_TITLE = f"{APP_NAME} by {WEBSITE}"
 
 # Official AQW game loader SWF (the real client entry point).
@@ -37,7 +37,7 @@ DEFAULT_WIDTH = 960
 DEFAULT_HEIGHT = 550
 
 # How long to keep trying to retitle the Ruffle window after spawn (seconds).
-_RETITLE_TIMEOUT = 12.0
+_RETITLE_TIMEOUT = 3.0
 
 
 # --------------------------------------------------------------------------- #
@@ -107,7 +107,7 @@ def find_ruffle() -> str | None:
 def ruffle_status() -> str:
     path = find_ruffle()
     if path:
-        return f"Ruffle ready: {path}"
+        return "Ready"
     searched = ", ".join(desc for _p, desc in candidate_locations())
     return f"Ruffle binary not found. Searched: {searched}"
 
@@ -156,6 +156,15 @@ def launch_game(
     else:
         kwargs["start_new_session"] = True
 
+    # On Linux, force Ruffle onto X11/XWayland so the window is visible to the
+    # X11 title APIs below (native Wayland windows cannot be retitled this way).
+    env = dict(os.environ)
+    if platform.system().lower() == "linux":
+        env["WINIT_UNIX_BACKEND"] = "x11"
+        env.pop("WAYLAND_DISPLAY", None)
+        env.pop("WAYLAND_SOCKET", None)
+    kwargs["env"] = env
+
     try:
         proc = subprocess.Popen(args, **kwargs)
     except OSError as exc:  # e.g. permission denied / not executable
@@ -177,7 +186,11 @@ def is_process_running(proc: subprocess.Popen | None) -> bool:
 # --------------------------------------------------------------------------- #
 
 def _retitle_window_async(pid: int, title: str) -> None:
-    """Best-effort background retitling; never blocks or raises."""
+    """Retitle in a worker thread; never blocks the caller or raises.
+
+    Uses a daemon thread (not a subprocess) with a short bounded timeout. X11
+    ctypes calls are kept off the GUI thread so they can't block the UI.
+    """
     try:
         import threading
         t = threading.Thread(target=_retitle_window, args=(pid, title), daemon=True)
@@ -187,7 +200,14 @@ def _retitle_window_async(pid: int, title: str) -> None:
 
 
 def _retitle_window(pid: int, title: str) -> None:
+    """Keep the window title correct for a short window after spawn.
+
+    Ruffle sets its title at window creation *and* again once the movie loads,
+    so a single retitle can be overwritten. Polling for a few seconds makes the
+    title stick regardless of when Ruffle finishes loading.
+    """
     deadline = time.time() + _RETITLE_TIMEOUT
+    last_ok = False
     while time.time() < deadline:
         try:
             if platform.system().lower() == "windows":
@@ -195,10 +215,12 @@ def _retitle_window(pid: int, title: str) -> None:
             else:
                 done = _set_x11_title(pid, title)
             if done:
-                return
+                last_ok = True
+            # Once we've succeeded at least once, keep correcting until deadline
+            # to catch Ruffle's post-load title reset.
         except Exception:
             pass
-        time.sleep(0.4)
+        time.sleep(0.3)
 
 
 # ---- Windows ------------------------------------------------------------- #
@@ -233,6 +255,14 @@ def _set_x11_title(pid: int, title: str) -> bool:
     x11_name = ctypes.util.find_library("X11") or "libX11.so.6"
     x11 = ctypes.CDLL(x11_name)
 
+    # Xlib must be told we may call it from multiple threads.
+    x11.XInitThreads.restype = ctypes.c_int
+    x11.XInitThreads.argtypes = []
+    try:
+        x11.XInitThreads()
+    except Exception:
+        pass
+
     x11.XOpenDisplay.restype = ctypes.c_void_p
     x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
     x11.XDefaultRootWindow.restype = ctypes.c_ulong
@@ -247,16 +277,19 @@ def _set_x11_title(pid: int, title: str) -> bool:
         root = x11.XDefaultRootWindow(display)
         atom_pid = _x11_intern_atom(x11, display, b"_NET_WM_PID")
         atom_net_name = _x11_intern_atom(x11, display, b"_NET_WM_NAME")
+        atom_wm_class = _x11_intern_atom(x11, display, b"WM_CLASS")
         atom_utf8 = _x11_intern_atom(x11, display, b"UTF8_STRING")
 
-        if 0 in (atom_pid, atom_net_name, atom_utf8):
+        if 0 in (atom_pid, atom_net_name, atom_wm_class, atom_utf8):
             return False
 
-        windows = _x11_collect_windows(x11, display, root)
+        # Recursively collect all windows (client window is often nested under
+        # the WM frame, and on XWayland the client lacks _NET_WM_PID).
+        windows = _x11_collect_all_windows(x11, display, root)
         changed = False
         for win in windows:
             try:
-                if _x11_read_pid(x11, display, win, atom_pid) == pid:
+                if _x11_is_ruffle_window(x11, display, win, atom_pid, atom_wm_class, atom_net_name, pid):
                     _x11_store_name(x11, display, win, atom_net_name, atom_utf8, title)
                     changed = True
             except Exception:
@@ -272,7 +305,23 @@ def _x11_intern_atom(x11, display, name: bytes) -> int:
     return int(x11.XInternAtom(display, name, 0))
 
 
-def _x11_collect_windows(x11, display, root: int) -> list[int]:
+def _x11_collect_all_windows(x11, display, root: int) -> list[int]:
+    """Recursively collect every X11 window (client windows can be nested)."""
+    result: list[int] = []
+    stack: list[int] = [root]
+    seen: set[int] = set()
+    while stack:
+        win = stack.pop()
+        if win in seen:
+            continue
+        seen.add(win)
+        result.append(win)
+        for child in _x11_children(x11, display, win):
+            stack.append(child)
+    return result
+
+
+def _x11_children(x11, display, window: int) -> list[int]:
     x11.XQueryTree.restype = ctypes.c_int
     x11.XQueryTree.argtypes = [
         ctypes.c_void_p, ctypes.c_ulong,
@@ -289,7 +338,7 @@ def _x11_collect_windows(x11, display, root: int) -> list[int]:
 
     result: list[int] = []
     try:
-        if not x11.XQueryTree(display, root, ctypes.byref(root_ret), ctypes.byref(parent_ret),
+        if not x11.XQueryTree(display, window, ctypes.byref(root_ret), ctypes.byref(parent_ret),
                               ctypes.byref(children), ctypes.byref(nchildren)):
             return result
         for i in range(nchildren.value):
@@ -331,6 +380,57 @@ def _x11_read_pid(x11, display, window: int, atom_pid: int) -> int | None:
     finally:
         if prop:
             x11.XFree(prop)
+
+
+def _x11_read_string_prop(x11, display, window: int, atom: int) -> str:
+    """Read a string-type X11 property (e.g. WM_CLASS) into a Python string."""
+    x11.XGetWindowProperty.restype = ctypes.c_int
+    x11.XGetWindowProperty.argtypes = [
+        ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong,
+        ctypes.c_long, ctypes.c_long, ctypes.c_int, ctypes.c_ulong,
+        ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_ulong),
+        ctypes.POINTER(ctypes.c_void_p),
+    ]
+    x11.XFree.restype = None
+    x11.XFree.argtypes = [ctypes.c_void_p]
+
+    actual_type = ctypes.c_ulong()
+    actual_format = ctypes.c_int()
+    nitems = ctypes.c_ulong()
+    bytes_after = ctypes.c_ulong()
+    prop = ctypes.c_void_p()
+
+    try:
+        status = x11.XGetWindowProperty(
+            display, window, atom, 0, 4096, 0, 0,
+            ctypes.byref(actual_type), ctypes.byref(actual_format),
+            ctypes.byref(nitems), ctypes.byref(bytes_after), ctypes.byref(prop),
+        )
+        if status != 0 or not prop or nitems.value == 0:
+            return ""
+        raw = ctypes.string_at(prop, nitems.value)
+        return raw.decode("utf-8", "replace").rstrip("\x00")
+    finally:
+        if prop:
+            x11.XFree(prop)
+
+
+def _x11_is_ruffle_window(x11, display, window: int, atom_pid: int,
+                          atom_wm_class: int, atom_net_name: int, pid: int) -> bool:
+    """Return True if ``window`` belongs to the Ruffle game (by PID or WM_CLASS)."""
+    # 1) Direct PID match (_NET_WM_PID).
+    if _x11_read_pid(x11, display, window, atom_pid) == pid:
+        return True
+    # 2) WM_CLASS match — Ruffle client uses instance/class "rs.ruffle.Ruffle".
+    wm_class = _x11_read_string_prop(x11, display, window, atom_wm_class)
+    if "ruffle" in wm_class.lower():
+        return True
+    # 3) Existing _NET_WM_NAME matches the Ruffle default title pattern.
+    name = _x11_read_string_prop(x11, display, window, atom_net_name)
+    if name.lower().startswith("ruffle -"):
+        return True
+    return False
 
 
 def _x11_store_name(x11, display, window: int, atom_net_name: int, atom_utf8: int,

@@ -112,8 +112,8 @@ class Api:
     def app_info(self) -> dict:
         return {
             "name": APP_NAME,
-            "website": WEBSITE,
-            "website_url": f"https://{WEBSITE}",
+            "website": WEBSITE,          # display text: "Epicalyx"
+            "website_url": "https://www.epicalyx.org",
         }
 
     # ---- settings ---------------------------------------------------------

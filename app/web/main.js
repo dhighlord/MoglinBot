@@ -12,8 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const gameHero = document.getElementById('game-hero');
   const gameStatusbar = document.getElementById('game-statusbar');
   const gameRunningPill = document.getElementById('game-running-pill');
-  const gamePid = document.getElementById('game-pid');
-  const gameUrlHint = document.getElementById('game-url-hint');
 
   const ruffleDot = document.getElementById('ruffle-dot');
   const ruffleStatus = document.getElementById('ruffle-status');
@@ -23,10 +21,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnClearLogs = document.getElementById('btn-clear-logs');
 
   const tabInfo = {
-    game: { title: 'Game', subtitle: 'Launch and play the real AQW client via the bundled Flash emulator' },
-    trainer: { title: 'Trainer & Bot', subtitle: 'Automation engine (coming in the next milestone)' },
-    scripts: { title: 'Scripts', subtitle: 'Bot script manager (coming soon)' },
-    logs: { title: 'Logs', subtitle: 'Client activity log' },
+    game: { title: 'Game', subtitle: 'Launch AQW' },
+    trainer: { title: 'Trainer & Bot', subtitle: '' },
+    scripts: { title: 'Scripts', subtitle: '' },
+    logs: { title: 'Logs', subtitle: '' },
   };
 
   // --- logging ---
@@ -74,12 +72,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const api = pyApi();
     if (!api) return;
     api.game_status().then(s => {
-      if (s.ruffle && s.ruffle.startsWith('Ruffle ready')) {
+      if (s.ruffle && s.ruffle === 'Ready') {
         ruffleDot.className = 'dot ok';
-        ruffleStatus.textContent = 'Ruffle ready';
+        ruffleStatus.textContent = 'Ready';
       } else {
         ruffleDot.className = 'dot bad';
-        ruffleStatus.textContent = 'Ruffle missing';
+        ruffleStatus.textContent = 'Not ready';
       }
       updateGameUI(s);
     }).catch(() => {});
@@ -90,7 +88,6 @@ document.addEventListener('DOMContentLoaded', () => {
       gameHero.classList.add('hidden');
       gameStatusbar.classList.remove('hidden');
       gameRunningPill.textContent = '● Game running';
-      gamePid.textContent = 'Process ID: ' + s.pid;
       btnLaunch.classList.add('hidden');
       btnClose.classList.remove('hidden');
     } else {
@@ -106,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!api) { log('Python bridge not ready.', 'error'); return; }
     btnLaunch.disabled = true;
     if (btnLaunch2) btnLaunch2.disabled = true;
-    log('Launching AQW via Ruffle...');
+    log('Launching AQW...');
     api.launch_game().then(res => {
       if (res.success) {
         log('Game launched (PID ' + res.pid + ').', 'success');
@@ -159,11 +156,11 @@ document.addEventListener('DOMContentLoaded', () => {
           a.textContent = info.website;
         });
       }
-      log(info.name + ' — official site: ' + info.website, 'success');
+      log(info.name + ' — ' + info.website, 'success');
     }).catch(() => {});
 
     api.load_settings().then(s => {
-      gameUrlHint.textContent = s.game_url || '';
+      // settings loaded
     }).catch(() => {});
 
     updateRuffleStatus();

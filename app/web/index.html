@@ -59,10 +59,10 @@
 
       <div class="sidebar-footer">
         <span class="dot" id="ruffle-dot"></span>
-        <span id="ruffle-status">Checking Ruffle...</span>
+        <span id="ruffle-status">Checking...</span>
       </div>
       <div class="sidebar-credit">
-        <a href="https://www.epicalyx.org" target="_blank" rel="noopener">www.epicalyx.org</a>
+        <a href="https://www.epicalyx.org" target="_blank" rel="noopener">Epicalyx</a>
       </div>
     </aside>
 
@@ -71,7 +71,7 @@
       <header class="header">
         <div class="header-title">
           <h1 id="tab-title">Game</h1>
-          <p id="tab-subtitle">Launch and play the real AQW client via the bundled Flash emulator</p>
+          <p id="tab-subtitle">Launch AQW</p>
         </div>
         <div class="header-controls" id="game-controls">
           <button class="btn btn-primary" id="btn-launch">
@@ -98,12 +98,6 @@
               <path d="M7 15l4-4 3 3 4-5"></path>
             </svg>
             <h2>AdventureQuest Worlds</h2>
-            <p class="muted">
-              Flash Player reached end-of-life, so the game can no longer run in a
-              browser. This client uses <strong>Ruffle</strong> — an open-source Flash
-              emulator — to run the official AQW client on Windows and Linux, the same
-              way Artix's own launcher does.
-            </p>
             <div class="hero-actions">
               <button class="btn btn-primary btn-lg" id="btn-launch-2">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
@@ -111,13 +105,11 @@
                 </svg>
                 Launch AQW
               </button>
-              <span class="hint" id="game-url-hint"></span>
             </div>
           </div>
         </div>
         <div class="game-statusbar hidden" id="game-statusbar">
           <span class="status-pill running" id="game-running-pill">● Game running</span>
-          <span class="muted" id="game-pid"></span>
         </div>
       </section>
 
@@ -125,11 +117,6 @@
       <section class="tab" id="tab-trainer">
         <div class="placeholder-card">
           <h2>Trainer &amp; Bot Features</h2>
-          <p class="muted">
-            This is where the bot/trainer engine lands in the next milestone — built on
-            the already-working <code>aqw-python</code> core (questing, combat, inventory,
-            bank, navigation, drop whitelist, auto-relogin, anti-mod, and more).
-          </p>
           <div class="feature-grid">
             <div class="feature">Combat / skill rotation</div>
             <div class="feature">Quest accept &amp; turn-in</div>
@@ -145,10 +132,6 @@
       <section class="tab" id="tab-scripts">
         <div class="placeholder-card">
           <h2>Scripting</h2>
-          <p class="muted">
-            A script editor and bot-script manager will live here, mirroring RBot's
-            script capabilities but cross-platform.
-          </p>
         </div>
       </section>
 
@@ -170,7 +153,7 @@
   <footer class="app-footer">
     <span>Moglin Bot</span>
     <span class="sep">·</span>
-    <span>Official site: <a href="https://www.epicalyx.org" target="_blank" rel="noopener">www.epicalyx.org</a></span>
+    <span><a href="https://www.epicalyx.org" target="_blank" rel="noopener">Epicalyx</a></span>
   </footer>
 
   <script src="main.js"></script>
