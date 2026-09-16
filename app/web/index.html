@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moglin Bot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+        <div class="brand-name">
+          <h2>MOGLIN BOT</h2>
+          <span>UNIFIED CLIENT</span>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-btn active" data-tab="game">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
+            <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+            <path d="M6 12h4m-2-2v4"></path>
+            <circle cx="16" cy="12" r="1.5"></circle>
+            <circle cx="19" cy="9" r="0.5"></circle>
+          </svg>
+          Game
+        </button>
+        <button class="nav-btn" data-tab="trainer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
+            <path d="M12 20V10M18 20V4M6 20v-4"></path>
+          </svg>
+          Trainer
+        </button>
+        <button class="nav-btn" data-tab="scripts">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+          </svg>
+          Scripts
+        </button>
+        <button class="nav-btn" data-tab="logs">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
+            <line x1="4" y1="9" x2="20" y2="9"></line>
+            <line x1="4" y1="15" x2="20" y2="15"></line>
+            <line x1="10" y1="3" x2="8" y2="21"></line>
+            <line x1="16" y1="3" x2="14" y2="21"></line>
+          </svg>
+          Logs
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <span class="dot" id="ruffle-dot"></span>
+        <span id="ruffle-status">Checking Ruffle...</span>
+      </div>
+      <div class="sidebar-credit">
+        <a href="https://www.epicalyx.org" target="_blank" rel="noopener">www.epicalyx.org</a>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="content">
+      <header class="header">
+        <div class="header-title">
+          <h1 id="tab-title">Game</h1>
+          <p id="tab-subtitle">Launch and play the real AQW client via the bundled Flash emulator</p>
+        </div>
+        <div class="header-controls" id="game-controls">
+          <button class="btn btn-primary" id="btn-launch">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            Launch Game
+          </button>
+          <button class="btn btn-danger hidden" id="btn-close-game">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
+              <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+            </svg>
+            Close Game
+          </button>
+        </div>
+      </header>
+
+      <!-- Game tab -->
+      <section class="tab active" id="tab-game">
+        <div class="game-hero" id="game-hero">
+          <div class="hero-card">
+            <svg class="hero-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="2" y="4" width="20" height="16" rx="3"></rect>
+              <path d="M7 15l4-4 3 3 4-5"></path>
+            </svg>
+            <h2>AdventureQuest Worlds</h2>
+            <p class="muted">
+              Flash Player reached end-of-life, so the game can no longer run in a
+              browser. This client uses <strong>Ruffle</strong> — an open-source Flash
+              emulator — to run the official AQW client on Windows and Linux, the same
+              way Artix's own launcher does.
+            </p>
+            <div class="hero-actions">
+              <button class="btn btn-primary btn-lg" id="btn-launch-2">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                Launch AQW
+              </button>
+              <span class="hint" id="game-url-hint"></span>
+            </div>
+          </div>
+        </div>
+        <div class="game-statusbar hidden" id="game-statusbar">
+          <span class="status-pill running" id="game-running-pill">● Game running</span>
+          <span class="muted" id="game-pid"></span>
+        </div>
+      </section>
+
+      <!-- Trainer tab (placeholder) -->
+      <section class="tab" id="tab-trainer">
+        <div class="placeholder-card">
+          <h2>Trainer &amp; Bot Features</h2>
+          <p class="muted">
+            This is where the bot/trainer engine lands in the next milestone — built on
+            the already-working <code>aqw-python</code> core (questing, combat, inventory,
+            bank, navigation, drop whitelist, auto-relogin, anti-mod, and more).
+          </p>
+          <div class="feature-grid">
+            <div class="feature">Combat / skill rotation</div>
+            <div class="feature">Quest accept &amp; turn-in</div>
+            <div class="feature">Inventory &amp; bank manager</div>
+            <div class="feature">Map navigation</div>
+            <div class="feature">Drop whitelist</div>
+            <div class="feature">Auto-relogin &amp; anti-mod</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Scripts tab (placeholder) -->
+      <section class="tab" id="tab-scripts">
+        <div class="placeholder-card">
+          <h2>Scripting</h2>
+          <p class="muted">
+            A script editor and bot-script manager will live here, mirroring RBot's
+            script capabilities but cross-platform.
+          </p>
+        </div>
+      </section>
+
+      <!-- Logs tab -->
+      <section class="tab" id="tab-logs">
+        <div class="logs">
+          <div class="logs-toolbar">
+            <input type="text" id="log-filter" placeholder="Filter logs...">
+            <button class="btn btn-outline" id="btn-clear-logs">Clear</button>
+          </div>
+          <div class="console" id="console">
+            <div class="log-line muted">Client shell initialized.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="app-footer">
+    <span>Moglin Bot</span>
+    <span class="sep">·</span>
+    <span>Official site: <a href="https://www.epicalyx.org" target="_blank" rel="noopener">www.epicalyx.org</a></span>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
