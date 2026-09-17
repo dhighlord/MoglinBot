@@ -37,7 +37,24 @@ from ruffle_launcher import (  # noqa: E402
 from bot_engine import BotController, LogBus, ensure_aqw_python, find_aqw_python  # noqa: E402
 
 _WINDOW_TITLE = f"{APP_NAME} by {WEBSITE}"
-_CONFIG_PATH = os.path.join(_ROOT, "moglinbot_config.json")
+
+
+def _config_dir() -> str:
+    """Return a writable, persistent config directory.
+
+    In frozen builds ``__file__`` lives in PyInstaller's temp ``_MEIPASS``
+    directory which is deleted on exit, so we use the user's home directory
+    instead. In development we keep it next to the source for convenience.
+    """
+    if getattr(sys, "frozen", False):
+        d = os.path.join(os.path.expanduser("~"), ".moglinbot")
+    else:
+        d = _ROOT
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+_CONFIG_PATH = os.path.join(_config_dir(), "moglinbot_config.json")
 
 
 def _free_port() -> int:
@@ -95,6 +112,10 @@ class Api:
         self._game_proc: subprocess.Popen | None = None
         self._log_bus = LogBus()
         self._bot = BotController(self._log_bus)
+        # Redirect stdout/stderr so the aqw-python engine's print() output is
+        # captured and streamed to the GUI console.
+        sys.stdout = self._log_bus
+        sys.stderr = self._log_bus
 
     def set_window(self, window: Any) -> None:
         self._window = window

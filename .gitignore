@@ -35,3 +35,6 @@ Desktop.ini
 
 # Logs
 *.log
+
+# Local config (contains credentials)
+moglinbot_config.json

@@ -227,18 +227,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- scripts ---
-  function refreshModules() {
+  function refreshModules(preferred) {
     const api = pyApi();
     if (!api) return;
     api.bot_modules().then(mods => {
-      const current = selectBotModule.value;
+      const current = preferred || selectBotModule.value || '__idle__';
       selectBotModule.innerHTML = '<option value="__idle__">Idle (stay connected)</option>' +
         mods.map(m => `<option value="${esc(m.path)}">${esc(m.name)}</option>`).join('');
       if (current) selectBotModule.value = current;
       log(`Loaded ${mods.length} bot scripts.`);
     }).catch(() => {});
   }
-  btnRefreshModules.addEventListener('click', refreshModules);
+  btnRefreshModules.addEventListener('click', () => refreshModules());
   btnScriptStart.addEventListener('click', () => {
     const api = pyApi();
     if (!api) return;
@@ -271,6 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!info.engine_ready) log('aqw-python engine not found — bot features disabled.', 'error');
     }).catch(() => {});
 
+    let savedBotPath = '__idle__';
     api.load_settings().then(s => {
       usernameInput.value = s.username || '';
       passwordInput.value = s.password || '';
@@ -278,10 +279,10 @@ document.addEventListener('DOMContentLoaded', () => {
       roomInput.value = s.room_number || 1;
       farmClassInput.value = s.farm_class || '';
       soloClassInput.value = s.solo_class || '';
-      if (s.bot_path && s.bot_path !== '__idle__') selectBotModule.value = s.bot_path;
+      savedBotPath = s.bot_path || '__idle__';
     }).catch(() => {});
 
-    refreshModules();
+    refreshModules(savedBotPath);
     updateRuffleStatus();
     updateBotStatus();
 
