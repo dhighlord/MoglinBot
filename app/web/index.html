@@ -81,39 +81,11 @@
         </div>
       </header>
 
-      <!-- Live tab -->
+      <!-- Live tab (real game screen) -->
       <section class="tab active" id="tab-live">
-        <div class="live-layout">
-          <div class="card live-world-card">
-            <div class="live-map-header">
-              <span class="live-map-name" id="live-map-name">-</span>
-              <span class="muted" id="live-cell-info">-</span>
-            </div>
-            <div class="live-world" id="live-world">
-              <div class="live-placeholder muted">Connect the bot to see the room live.</div>
-            </div>
-            <div class="live-legend">
-              <span class="legend-item"><span class="legend-dot you"></span> You</span>
-              <span class="legend-item"><span class="legend-dot monster"></span> Monster</span>
-              <span class="legend-item"><span class="legend-dot player"></span> Player</span>
-            </div>
-          </div>
-          <div class="card live-side-card">
-            <h3>Your Vitals</h3>
-            <div class="vitals-bar">
-              <div class="vitals-row">
-                <span>HP</span>
-                <div class="bar"><div class="bar-fill hp" id="live-hp-bar"></div></div>
-                <span id="live-hp-text">-</span>
-              </div>
-              <div class="vitals-row">
-                <span>MP</span>
-                <div class="bar"><div class="bar-fill mp" id="live-mp-bar"></div></div>
-                <span id="live-mp-text">-</span>
-              </div>
-            </div>
-            <h3>Room</h3>
-            <div class="live-room-list" id="live-room-list"></div>
+        <div class="game-embed-wrap">
+          <div id="game-embed" class="game-embed">
+            <div class="game-placeholder muted">Loading game client...</div>
           </div>
         </div>
       </section>

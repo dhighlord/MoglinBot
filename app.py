@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import asyncio
 import socket
 import subprocess
 import sys
@@ -34,9 +35,35 @@ from ruffle_launcher import (  # noqa: E402
     launch_game,
     ruffle_status,
 )
-from bot_engine import BotController, LogBus, ensure_aqw_python, find_aqw_python  # noqa: E402
+from bot_engine import (  # noqa: E402
+    BotController,
+    LiveBotController,
+    LogBus,
+    ensure_aqw_python,
+    find_aqw_python,
+)
+from live_client import LiveClient  # noqa: E402
 
 _WINDOW_TITLE = f"{APP_NAME} by {WEBSITE}"
+
+# Local WebSocket<->TCP relay port, so the game's flash.net.Socket can reach
+# AQW's servers from inside the Ruffle web player (browsers can't open raw TCP).
+RELAY_PORT = 8088
+
+
+def _start_relay() -> None:
+    """Run the WS<->TCP relay in a background thread with its own event loop."""
+    from ws_relay import TcpWsRelay
+
+    def run():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(TcpWsRelay("127.0.0.1", RELAY_PORT).serve_forever())
+        except Exception:
+            pass
+
+    threading.Thread(target=run, daemon=True, name="ws-relay").start()
 
 
 def _config_dir() -> str:
@@ -111,7 +138,8 @@ class Api:
         self._window: Any = None
         self._game_proc: subprocess.Popen | None = None
         self._log_bus = LogBus()
-        self._bot = BotController(self._log_bus)
+        self._live = LiveClient()
+        self._bot = LiveBotController(self._log_bus, self._live)
         # Redirect stdout/stderr so the aqw-python engine's print() output is
         # captured and streamed to the GUI console.
         sys.stdout = self._log_bus
@@ -119,6 +147,31 @@ class Api:
 
     def set_window(self, window: Any) -> None:
         self._window = window
+        # Route live-client JS calls through the webview.
+        self._live.set_eval_js(lambda js: window.evaluate_js(js))
+
+    # ---- live game client (called from the Ruffle embed in JS) -------------
+    def game_loaded(self) -> dict:
+        """JS signals the game has fully loaded in the Ruffle player."""
+        self._live.mark_game_loaded()
+        return {"success": True}
+
+    def game_closed(self) -> dict:
+        self._live.mark_game_closed()
+        return {"success": True}
+
+    def game_packet(self, packet: str) -> dict:
+        """JS forwards a server packet from the live client."""
+        self._live.on_packet(packet)
+        return {"success": True}
+
+    def game_pext(self, packet: str) -> dict:
+        self._live.on_pext(packet)
+        return {"success": True}
+
+    def game_debug(self, message: str) -> dict:
+        self._live.on_debug(message)
+        return {"success": True}
 
     # ---- game display -----------------------------------------------------
     def launch_game(self, url: str | None = None) -> dict:
@@ -165,15 +218,6 @@ class Api:
 
     def bot_bank(self) -> list[dict]:
         return self._bot.bank()
-
-    def bot_monsters(self) -> list[dict]:
-        return self._bot.monsters()
-
-    def bot_quests(self) -> list[dict]:
-        return self._bot.quests()
-
-    def bot_world(self) -> dict:
-        return self._bot.world()
 
     def bot_modules(self) -> list[dict]:
         return self._bot.list_bot_modules()
@@ -239,6 +283,9 @@ def _icon_path() -> str | None:
 
 def main() -> None:
     api = Api()
+
+    # Start the WS<->TCP relay so the game's socket can reach AQW servers.
+    _start_relay()
 
     web_dir = _web_dir()
     url = _start_static_server(web_dir)

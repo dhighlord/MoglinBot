@@ -81,27 +81,29 @@ document.addEventListener('DOMContentLoaded', () => {
     return (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
   }
 
-  // --- game controls ---
+  // --- game controls (embedded Ruffle game) ---
   function launchGame() {
-    const api = pyApi();
-    if (!api) { log('Python bridge not ready.', 'error'); return; }
-    btnLaunch.disabled = true;
-    log('Launching AQW...');
-    api.launch_game().then(res => {
-      if (res.success) {
-        log('Game launched.', 'success');
-      } else {
-        log('Launch failed: ' + res.error, 'error');
-      }
-      btnLaunch.disabled = false;
-      updateRuffleStatus();
-    });
+    // The game is embedded; (re)start it if not already loaded.
+    if (!gameLoaded) {
+      log('Loading game client...');
+      embedGame();
+      return;
+    }
+    log('Game is already running.');
   }
   btnLaunch.addEventListener('click', launchGame);
   btnClose.addEventListener('click', () => {
+    // Closing the game just reloads the embed (the real client is in-page).
+    const container = document.getElementById('game-embed');
+    if (container) {
+      container.innerHTML = '<div class="game-placeholder muted">Loading game client...</div>';
+    }
+    rufflePlayer = null;
+    ruffleReady = false;
+    gameLoaded = false;
     const api = pyApi();
-    if (!api) return;
-    api.close_game().then(() => { log('Game closed.', 'success'); updateRuffleStatus(); });
+    if (api) api.game_closed && api.game_closed();
+    embedGame();
   });
 
   function updateRuffleStatus() {
@@ -110,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
     api.game_status().then(s => {
       if (s.ruffle === 'Ready') { ruffleDot.className = 'dot ok'; ruffleStatus.textContent = 'Ready'; }
       else { ruffleDot.className = 'dot bad'; ruffleStatus.textContent = 'Not ready'; }
-      if (s.running) {
+      if (gameLoaded) {
         btnLaunch.classList.add('hidden');
         btnClose.classList.remove('hidden');
       } else {
@@ -255,86 +257,83 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // --- Live world view ---
-  function updateLiveView() {
-    const api = pyApi();
-    if (!api) return;
-    api.bot_world().then(w => {
-      const mapNameEl = document.getElementById('live-map-name');
-      const cellInfoEl = document.getElementById('live-cell-info');
-      const worldEl = document.getElementById('live-world');
-      const roomListEl = document.getElementById('live-room-list');
-      const hpBar = document.getElementById('live-hp-bar');
-      const mpBar = document.getElementById('live-mp-bar');
-      const hpText = document.getElementById('live-hp-text');
-      const mpText = document.getElementById('live-mp-text');
+  // --- Live game embed (Ruffle web + rbot.swf bridge) ---
+  let rufflePlayer = null;   // ruffle player instance
+  let ruffleReady = false;   // ruffle API is ready
+  let gameLoaded = false;    // rbot.swf has loaded the real game
 
-      if (!w || !w.map) {
-        mapNameEl.textContent = '-';
-        cellInfoEl.textContent = '-';
-        worldEl.innerHTML = '<div class="live-placeholder muted">Connect the bot to see the room live.</div>';
-        roomListEl.innerHTML = '';
-        return;
+  function embedGame() {
+    const container = document.getElementById('game-embed');
+    if (!container || rufflePlayer) return;
+    if (!window.RufflePlayer) { setTimeout(embedGame, 200); return; }
+
+    try {
+      const ruffle = window.RufflePlayer.newest();
+      const player = ruffle.createPlayer();
+      player.style.width = '100%';
+      player.style.height = '100%';
+      container.innerHTML = '';
+      container.appendChild(player);
+      const ru = player.ruffle();
+      rufflePlayer = player;
+      ruffleReady = !!ru;
+
+      // Trace observer -> forward to logs.
+      if (ru.traceObserver !== undefined) {
+        try { ru.traceObserver = (m) => log('[game] ' + m); } catch (e) {}
       }
 
-      mapNameEl.textContent = w.map;
-      cellInfoEl.textContent = w.cell ? `Cell ${w.cell} · Pad ${w.pad}` : '';
+      // rbot.swf forwards server packets + pext to JS via ExternalInterface.call.
+      // Ruffle web resolves these as indirect eval of the *name* in global scope,
+      // so we must define global functions named exactly "loaded", "pext",
+      // "packet", and "debug" (matching rbot.swf's Externalizer.call(...)).
+      window.loaded = () => {
+        gameLoaded = true;
+        const api = pyApi();
+        if (api) api.game_loaded();
+        log('Game loaded in Ruffle.', 'success');
+      };
+      window.pext = (packet) => {
+        const api = pyApi();
+        if (api) api.game_pext(String(packet));
+      };
+      window.packet = (packet) => {
+        const api = pyApi();
+        if (api) api.game_packet(String(packet));
+      };
+      window.debug = (message) => {
+        const api = pyApi();
+        if (api) api.game_debug(String(message));
+        else log('[game] ' + message);
+      };
+      // Bridge for the bot to inject packets (called from Python via evaluate_js).
+      window.__moglin_sendPacket = (packet, type) => {
+        if (!ru || !ru.callExternalInterface) return false;
+        try {
+          ru.callExternalInterface('sendClientPacket', packet, type || 'str');
+          return true;
+        } catch (e) { return false; }
+      };
 
-      // Vitals (also fetch bot_status for hp/mp numbers)
-      api.bot_status().then(s => {
-        const maxHp = Math.max(s.max_hp, 1);
-        const maxMp = Math.max(s.max_mp, 1);
-        const hpPct = Math.min(100, Math.max(0, (s.hp / maxHp) * 100));
-        const mpPct = Math.min(100, Math.max(0, (s.mp / maxMp) * 100));
-        hpBar.style.width = hpPct + '%';
-        mpBar.style.width = mpPct + '%';
-        hpText.textContent = `${s.hp} / ${s.max_hp}`;
-        mpText.textContent = `${s.mp} / ${s.max_mp}`;
-      }).catch(() => {});
-
-      // Build a compact, readable world panel grouped by cell.
-      const cells = {};
-      (w.monsters || []).forEach(m => {
-        const c = m.cell || '?';
-        cells[c] = cells[c] || { monsters: [], players: [] };
-        cells[c].monsters.push(m);
+      // Load rbot.swf (the rBot loader that loads the real game and registers
+      // ExternalInterface callbacks like sendClientPacket / loadClient).
+      const loadOptions = {
+        url: 'rbot.swf',
+        base: '.',
+        allowScriptAccess: true,
+        // AQW's game uses flash.net.Socket; route it through our WS<->TCP relay.
+        socketProxy: [
+          { host: '*', port: 0, proxyUrl: 'ws://127.0.0.1:8088/?host=' },
+        ],
+      };
+      ru.load(loadOptions).then(() => {
+        log('rbot.swf loaded; waiting for game...');
+      }).catch((e) => {
+        log('rbot.swf load error: ' + e, 'error');
       });
-      (w.players || []).forEach(p => {
-        const c = p.cell || '?';
-        cells[c] = cells[c] || { monsters: [], players: [] };
-        cells[c].players.push(p);
-      });
-
-      const cellNames = Object.keys(cells);
-      if (cellNames.length === 0) {
-        worldEl.innerHTML = '<div class="live-placeholder muted">No monsters or players visible in this room.</div>';
-      } else {
-        worldEl.innerHTML = cellNames.map(c => {
-          const monsters = cells[c].monsters.map(m =>
-            `<div class="world-entity monster ${m.alive ? '' : 'dead'}">
-               <span class="ent-name">${esc(m.name)}</span>
-               <span class="ent-hp">${m.hp}/${m.max_hp}</span>
-               <span class="mini-bar"><span class="mini-fill" style="width:${m.hp_pct}%"></span></span>
-             </div>`).join('');
-          const players = cells[c].players.map(p =>
-            `<div class="world-entity player">
-               <span class="ent-name">${esc(p.name)}${p.afk ? ' (AFK)' : ''}</span>
-               <span class="ent-hp">Lv ${p.level} · ${p.hp}/${p.max_hp}</span>
-             </div>`).join('');
-          const meInCell = (w.cell === c) ? '<div class="world-entity you"><span class="ent-name">You</span></div>' : '';
-          return `<div class="world-cell">
-                    <div class="cell-title">Cell ${esc(c)}</div>
-                    ${meInCell}${monsters}${players}
-                  </div>`;
-        }).join('');
-      }
-
-      // Room side list (monsters only)
-      roomListEl.innerHTML = (w.monsters || []).length
-        ? (w.monsters || []).map(m =>
-            `<div class="item-row"><span>${esc(m.name)}</span><span class="qty">${m.alive ? m.hp + '/' + m.max_hp : 'dead'}</span></div>`).join('')
-        : '<div class="muted">No monsters.</div>';
-    }).catch(() => {});
+    } catch (e) {
+      log('Game embed error: ' + e, 'error');
+    }
   }
 
   // --- polling loops ---
@@ -368,13 +367,12 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshModules(savedBotPath);
     updateRuffleStatus();
     updateBotStatus();
-    updateLiveView();
+    embedGame();
 
     // periodic status + log drain
     setInterval(() => {
       updateRuffleStatus();
       updateBotStatus();
-      updateLiveView();
       api.bot_logs().then(lines => lines.forEach(l => {
         if (l.trim()) log(l.trim());
       })).catch(() => {});

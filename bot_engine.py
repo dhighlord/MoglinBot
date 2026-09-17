@@ -15,6 +15,7 @@ import queue
 import re
 import sys
 import threading
+import time
 from typing import Any, Callable
 
 # Name of the bundled aqw-python package directory inside PyInstaller _MEIPASS.
@@ -100,6 +101,267 @@ class LogBus:
             except queue.Empty:
                 break
         return items
+
+
+class LiveBotController:
+    """Runs an aqw-python ``Bot`` that drives the *live* game client.
+
+    Instead of opening a headless TCP socket (aqw-python's default), the bot's
+    packets are injected into the real game running in the embedded Ruffle
+    player via ``sendClientPacket``. Server responses are read back from the
+    live client's ``packet``/``pext`` callbacks.
+
+    This gives rBot's behaviour: the character visibly moves/fights in the game
+    window as the script runs.
+    """
+
+    def __init__(self, log_bus: LogBus, live_client: Any) -> None:
+        self._log_bus = log_bus
+        self._live = live_client
+        self.bot: Any = None
+        self.thread: threading.Thread | None = None
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.current_module: str = ""
+        self._last_error: str = ""
+
+    def set_live_client(self, live_client: Any) -> None:
+        self._live = live_client
+
+    def is_running(self) -> bool:
+        return self.thread is not None and self.thread.is_alive()
+
+    def start(self, config: dict) -> dict:
+        if self.is_running():
+            return {"success": False, "error": "Bot is already running."}
+        if self._live is None:
+            return {"success": False, "error": "Live game client is not ready."}
+
+        root = ensure_aqw_python()
+        if not root:
+            return {
+                "success": False,
+                "error": "aqw-python engine not found. Searched: "
+                + ", ".join(aqw_python_roots()),
+            }
+
+        try:
+            from core.bot import Bot
+        except Exception as exc:  # pragma: no cover
+            return {"success": False, "error": f"Failed to import engine: {exc}"}
+
+        module_path = (config.get("bot_path") or "").strip()
+        bot_main: Callable | None = None
+        if module_path and module_path != "__idle__":
+            try:
+                mod = importlib.import_module(module_path)
+                bot_main = getattr(mod, "main", None)
+                if bot_main is None:
+                    return {
+                        "success": False,
+                        "error": f"Bot module {module_path} has no main(cmd) function.",
+                    }
+            except Exception as exc:
+                return {"success": False, "error": f"Failed to load bot module '{module_path}': {exc}"}
+        else:
+            bot_main = _idle_main
+
+        whitelist = config.get("whitelist") or []
+        if isinstance(whitelist, str):
+            whitelist = [w.strip() for w in whitelist.split("\n") if w.strip()]
+
+        try:
+            bot = Bot(
+                roomNumber=int(config.get("room_number") or 1),
+                itemsDropWhiteList=whitelist,
+                cmdDelay=int(config.get("cmd_delay") or 1000),
+                showLog=True,
+                showDebug=False,
+                showChat=bool(config.get("show_chat", True)),
+                isScriptable=True,
+                followPlayer="",
+                slavesPlayer=[],
+                farmClass=(config.get("farm_class") or None),
+                soloClass=(config.get("solo_class") or None),
+                autoRelogin=bool(config.get("auto_relogin", True)),
+                muteSpamWarning=bool(config.get("mute_spam", True)),
+                antiMod=bool(config.get("anti_mod", True)),
+            )
+            bot.set_login_info(
+                config.get("username") or "",
+                config.get("password") or "",
+                config.get("server") or "Artix",
+            )
+        except Exception as exc:
+            return {"success": False, "error": f"Failed to create bot: {exc}"}
+
+        # Redirect the bot's I/O to the live game client (rBot-style).
+        self._patch_bot_for_live(bot)
+
+        self.bot = bot
+        self.current_module = module_path or "__idle__"
+        self._last_error = ""
+
+        self.thread = threading.Thread(
+            target=self._run, args=(bot, bot_main), daemon=True, name="aqw-live-bot"
+        )
+        self.thread.start()
+        return {"success": True}
+
+    def stop(self) -> dict:
+        if self.bot is not None:
+            try:
+                self.bot.stop_bot(user_triggered=True)
+            except Exception as exc:
+                return {"success": False, "error": str(exc)}
+        return {"success": True}
+
+    # ---- patch: route the headless Bot's socket I/O through the live client --
+    def _patch_bot_for_live(self, bot: Any) -> None:
+        """Override the Bot's socket-bound methods to use the live client."""
+        live = self._live
+
+        # The real client already logged in and connected; mark it so the bot's
+        # run loop proceeds without opening its own socket.
+        bot.is_client_connected = True
+
+        def write_message(message: str):
+            live.send(message, "str")
+            return None
+
+        def read_batch(conn=None):
+            # Non-blocking drain of packets forwarded from the live client.
+            msgs = []
+            for item in live.drain_inbound():
+                if item.get("type") == "packet":
+                    msgs.append(item.get("data", ""))
+            return msgs
+
+        def login(username, password, server):
+            # The live game client handles login itself; we only record identity.
+            bot.player.USER = username
+            bot.server = server
+            return True
+
+        bot.write_message = write_message
+        bot.read_batch = read_batch
+        bot.login = login
+
+        # read_server_in_background uses read_batch_async -> read_batch(conn),
+        # so overriding read_batch is enough.
+
+    def _run(self, bot: Any, bot_main: Callable) -> None:
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        try:
+            # Drive the script directly against the live client. We bypass
+            # start_bot()'s login/connect (which would open a socket) and
+            # instead run the scripted main() in the same manner, with a
+            # background reader that feeds server packets into the handler.
+            async def driver():
+                # background reader
+                async def reader():
+                    while bot.is_client_connected:
+                        msgs = bot.read_batch(None)
+                        if msgs:
+                            for msg in msgs:
+                                await bot.handle_server_response(msg)
+                        await asyncio.sleep(0.05)
+
+                task = asyncio.create_task(reader())
+                # wait until the live client signals the game loaded
+                while not self._live.is_game_loaded():
+                    await asyncio.sleep(0.05)
+                # allow the character to load
+                await asyncio.sleep(1.0)
+                try:
+                    await bot_main(bot.command)
+                except Exception as exc:  # noqa: BLE001
+                    self._last_error = str(exc)
+                    print(f"Script error: {exc}")
+                finally:
+                    bot.is_client_connected = False
+                    task.cancel()
+
+            self.loop.run_until_complete(driver())
+        except Exception as exc:  # noqa: BLE001
+            self._last_error = str(exc)
+            print(f"Bot engine stopped: {exc}")
+        finally:
+            try:
+                self.loop.close()
+            except Exception:
+                pass
+
+    # ---- status (same surface as BotController) ----------------------------
+    def status(self) -> dict:
+        if self.bot is None:
+            return {"running": self.is_running(), "connected": False}
+        p = self.bot.player
+        return {
+            "running": self.is_running(),
+            "connected": bool(self.bot.is_client_connected),
+            "username": p.USER or "",
+            "server": self.bot.server or "",
+            "map": getattr(self.bot, "strMapName", "") or "",
+            "cell": p.CELL or "",
+            "pad": p.PAD or "",
+            "gold": p.GOLD,
+            "gold_farmed": p.GOLDFARMED,
+            "exp_farmed": p.EXPFARMED,
+            "hp": max(0, min(int(p.CURRENT_HP), max(int(p.MAX_HP), 1))),
+            "max_hp": max(int(p.MAX_HP), 1),
+            "mp": p.MANA,
+            "max_mp": p.MAX_MP,
+            "is_dead": bool(p.ISDEAD),
+            "in_combat": bool(p.IS_IN_COMBAT),
+            "inventory_count": len(p.INVENTORY),
+            "bank_count": len(p.BANK),
+            "module": self.current_module,
+            "last_error": self._last_error,
+        }
+
+    def inventory(self, limit: int = 100) -> list[dict]:
+        if self.bot is None:
+            return []
+        return [
+            {"name": i.item_name, "qty": i.qty, "equipped": bool(i.is_equipped)}
+            for i in self.bot.player.INVENTORY[:limit]
+        ]
+
+    def bank(self, limit: int = 100) -> list[dict]:
+        if self.bot is None:
+            return []
+        return [{"name": i.item_name, "qty": i.qty} for i in self.bot.player.BANK[:limit]]
+
+    def drain_logs(self) -> list[str]:
+        return [strip_ansi(m) for m in self._log_bus.drain()]
+
+    def list_bot_modules(self) -> list[dict]:
+        """Discover scriptable bot modules (shared with BotController)."""
+        root = ensure_aqw_python()
+        if not root:
+            return []
+        bot_dir = os.path.join(root, "bot")
+        if not os.path.isdir(bot_dir):
+            return []
+        modules: list[dict] = []
+        for dirpath, dirnames, filenames in os.walk(bot_dir):
+            dirnames[:] = [d for d in dirnames if not d.startswith("_")]
+            for fn in sorted(filenames):
+                if not fn.endswith(".py") or fn.startswith("_"):
+                    continue
+                full = os.path.join(dirpath, fn)
+                rel = os.path.relpath(full, root)
+                modpath = rel[:-3].replace(os.sep, ".")
+                try:
+                    with open(full, "r", encoding="utf-8", errors="replace") as fh:
+                        text = fh.read()
+                except OSError:
+                    continue
+                if not re.search(r"(async\s+def|def)\s+main\s*\(", text):
+                    continue
+                modules.append({"path": modpath, "name": modpath})
+        return modules
 
 
 class BotController:
