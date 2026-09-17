@@ -341,6 +341,11 @@ document.addEventListener('DOMContentLoaded', () => {
       };
       ru.load(loadOptions).then(() => {
         log('rbot.swf loaded; waiting for game...');
+        // The web player can auto-pause (background/hidden tab), which stalls
+        // AVM2 execution so the SWF's constructor never runs and callbacks are
+        // never registered. Explicitly resume/play to start frame execution.
+        try { if (ru && typeof ru.resume === 'function') ru.resume(); } catch (e) {}
+        try { if (player && typeof player.play === 'function') player.play(); } catch (e) {}
         // rbot.swf asks JS for the game URL via "requestLoadGame", but the
         // SWF->JS ExternalInterface direction may not fire under Ruffle. So we
         // proactively tell it to load the default game client once it's ready.
