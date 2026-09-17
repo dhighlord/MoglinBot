@@ -17,9 +17,11 @@
 
 html, body {
   height: 100%;
-  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  font-family: 'Segoe UI', 'Outfit', system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .app {
@@ -116,6 +118,27 @@ html, body {
   font-weight: 600;
   cursor: pointer;
   transition: filter 0.15s, background 0.15s;
+  outline: none;
+}
+/* Remove the default focus ring (yellow square on Windows/QtWebEngine) and
+   replace it with a subtle one that fits the dark theme. */
+.btn:focus,
+.btn:focus-visible,
+button:focus,
+button:focus-visible,
+input:focus,
+input:focus-visible,
+select:focus,
+select:focus-visible,
+.nav-btn:focus,
+.nav-btn:focus-visible {
+  outline: none !important;
+  box-shadow: none;
+}
+.btn:focus-visible,
+button:focus-visible,
+.nav-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--primary-2);
 }
 .btn:hover { filter: brightness(1.08); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }

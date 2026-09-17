@@ -36,8 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const tabInfo = {
     live: { title: 'Live', subtitle: '' },
-    trainer: { title: 'Trainer', subtitle: '' },
-    scripts: { title: 'Scripts', subtitle: '' },
+    trainer: { title: 'Trainer & Bot', subtitle: '' },
     logs: { title: 'Logs', subtitle: '' },
   };
 

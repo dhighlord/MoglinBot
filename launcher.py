@@ -62,8 +62,10 @@ def main() -> int:
     # when imported as a module it does not. Run it explicitly.
     try:
         app.main()
-    except SystemExit:
-        raise
+    except SystemExit as exc:
+        # Clean exit (normal window close). Not an error.
+        write_log(f"app.main() exited cleanly (code {exc.code}).")
+        return 0
     except BaseException as exc:
         tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
         write_log("FATAL in app.main():\n" + tb)
@@ -75,6 +77,8 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         sys.exit(main())
+    except SystemExit:
+        raise
     except BaseException as exc:  # noqa: BLE001
         write_log("Launcher-level exception:\n" + "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
         show_error("Moglin Bot failed to start", f"{type(exc).__name__}: {exc}\n\nDetails in: {log_path()}")

@@ -34,13 +34,6 @@
           </svg>
           Trainer
         </button>
-        <button class="nav-btn" data-tab="scripts">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
-            <polyline points="16 18 22 12 16 6"></polyline>
-            <polyline points="8 6 2 12 8 18"></polyline>
-          </svg>
-          Scripts
-        </button>
         <button class="nav-btn" data-tab="logs">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
             <line x1="4" y1="9" x2="20" y2="9"></line>
@@ -181,10 +174,8 @@
             <div class="item-list" id="bank-list"></div>
           </div>
         </div>
-      </section>
 
-      <!-- Scripts tab -->
-      <section class="tab" id="tab-scripts">
+        <!-- Bot script (merged into Trainer) -->
         <div class="card">
           <h3>Bot Script</h3>
           <p class="muted">Select a scriptable bot module from the aqw-python engine.</p>
@@ -195,7 +186,6 @@
           <div class="trainer-actions">
             <button class="btn btn-primary" id="btn-script-start">Run Script</button>
           </div>
-          <p class="muted" id="script-hint">Scripts run with the account details from the Trainer tab.</p>
         </div>
       </section>
 
