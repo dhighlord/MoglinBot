@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const btnLaunch = document.getElementById('btn-launch');
   const btnClose = document.getElementById('btn-close-game');
+  const btnLaunchFlash = document.getElementById('btn-launch-flash');
 
   const ruffleDot = document.getElementById('ruffle-dot');
   const ruffleStatus = document.getElementById('ruffle-status');
@@ -92,6 +93,17 @@ document.addEventListener('DOMContentLoaded', () => {
     log('Game is already running.');
   }
   btnLaunch.addEventListener('click', launchGame);
+  if (btnLaunchFlash) {
+    btnLaunchFlash.addEventListener('click', () => {
+      const api = pyApi();
+      if (!api) return;
+      log('Opening game in Adobe Flash projector...');
+      api.launch_flash().then(res => {
+        if (res.success) { log('Flash game opened.', 'success'); updateRuffleStatus(); }
+        else { log('Flash launch failed: ' + res.error, 'error'); }
+      });
+    });
+  }
   btnClose.addEventListener('click', () => {
     // Closing the game just reloads the embed (the real client is in-page).
     const container = document.getElementById('game-embed');

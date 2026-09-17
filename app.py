@@ -218,6 +218,53 @@ class Api:
         except RuntimeError as exc:
             return {"success": False, "error": str(exc)}
 
+    def launch_flash(self) -> dict:
+        """Launch the game in the real Adobe Flash projector (rBot's runtime).
+
+        The Ruffle web embed renders AQW's title black on some setups; the
+        official Flash 32 standalone projector is the exact runtime rBot used
+        and is the proven renderer for AQW. It is looked up in the bundle's
+        ``vendor/flash`` directory (Windows: flashplayer.exe, Linux: flashplayer).
+        """
+        import platform as _platform
+
+        system = _platform.system().lower()
+        name = "flashplayer.exe" if system == "windows" else "flashplayer"
+        root = os.path.dirname(os.path.abspath(__file__))
+        if getattr(sys, "frozen", False):
+            meipass = getattr(sys, "_MEIPASS", None)
+            candidates = [
+                os.path.join(meipass, "flash", name) if meipass else "",
+                os.path.join(root, "flash", name),
+                os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "flash", name),
+            ]
+        else:
+            candidates = [os.path.join(root, "vendor", "flash", name)]
+        flash = next((c for c in candidates if c and os.path.isfile(c)), None)
+        if not flash:
+            return {
+                "success": False,
+                "error": (
+                    "Flash projector not found. Place the official Adobe Flash 32 "
+                    "standalone projector at vendor/flash/"
+                    + name
+                ),
+            }
+        if is_process_running(self._game_proc):
+            return {"success": False, "error": "Game window is already open."}
+        try:
+            kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+            if os.name == "nt":
+                kwargs["creationflags"] = (
+                    subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+                )
+            else:
+                kwargs["start_new_session"] = True
+            self._game_proc = subprocess.Popen([flash, AQW_LOADER_URL], **kwargs)
+            return {"success": True, "pid": self._game_proc.pid}
+        except OSError as exc:
+            return {"success": False, "error": f"Failed to start Flash: {exc}"}
+
     def close_game(self) -> dict:
         if is_process_running(self._game_proc):
             try:

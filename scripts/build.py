@@ -67,6 +67,12 @@ def build(platform: str, onefile: bool) -> int:
     add_ico = f"{ico}{sep}."
     add_png = f"{png}{sep}."
 
+    # Adobe Flash projector (the proven AQW renderer, rBot's runtime) ->
+    # extracted under "flash/" in _MEIPASS. Optional but recommended.
+    flash_name = "flashplayer.exe" if platform == "windows" else "flashplayer"
+    flash_path = os.path.join(ROOT, "vendor", "flash", flash_name)
+    add_flash = f"{flash_path}{sep}flash" if os.path.isfile(flash_path) else None
+
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--name", APP_NAME,
@@ -88,6 +94,8 @@ def build(platform: str, onefile: bool) -> int:
         "--collect-submodules", "model",
         "--collect-submodules", "abstracts",
     ]
+    if add_flash:
+        cmd += ["--add-data", add_flash]
     if onefile:
         cmd.append("--onefile")
     else:
