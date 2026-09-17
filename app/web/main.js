@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnClearLogs = document.getElementById('btn-clear-logs');
 
   const tabInfo = {
+    live: { title: 'Live', subtitle: '' },
     trainer: { title: 'Trainer', subtitle: '' },
     scripts: { title: 'Scripts', subtitle: '' },
     logs: { title: 'Logs', subtitle: '' },
@@ -254,6 +255,88 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // --- Live world view ---
+  function updateLiveView() {
+    const api = pyApi();
+    if (!api) return;
+    api.bot_world().then(w => {
+      const mapNameEl = document.getElementById('live-map-name');
+      const cellInfoEl = document.getElementById('live-cell-info');
+      const worldEl = document.getElementById('live-world');
+      const roomListEl = document.getElementById('live-room-list');
+      const hpBar = document.getElementById('live-hp-bar');
+      const mpBar = document.getElementById('live-mp-bar');
+      const hpText = document.getElementById('live-hp-text');
+      const mpText = document.getElementById('live-mp-text');
+
+      if (!w || !w.map) {
+        mapNameEl.textContent = '-';
+        cellInfoEl.textContent = '-';
+        worldEl.innerHTML = '<div class="live-placeholder muted">Connect the bot to see the room live.</div>';
+        roomListEl.innerHTML = '';
+        return;
+      }
+
+      mapNameEl.textContent = w.map;
+      cellInfoEl.textContent = w.cell ? `Cell ${w.cell} · Pad ${w.pad}` : '';
+
+      // Vitals (also fetch bot_status for hp/mp numbers)
+      api.bot_status().then(s => {
+        const maxHp = Math.max(s.max_hp, 1);
+        const maxMp = Math.max(s.max_mp, 1);
+        const hpPct = Math.min(100, Math.max(0, (s.hp / maxHp) * 100));
+        const mpPct = Math.min(100, Math.max(0, (s.mp / maxMp) * 100));
+        hpBar.style.width = hpPct + '%';
+        mpBar.style.width = mpPct + '%';
+        hpText.textContent = `${s.hp} / ${s.max_hp}`;
+        mpText.textContent = `${s.mp} / ${s.max_mp}`;
+      }).catch(() => {});
+
+      // Build a compact, readable world panel grouped by cell.
+      const cells = {};
+      (w.monsters || []).forEach(m => {
+        const c = m.cell || '?';
+        cells[c] = cells[c] || { monsters: [], players: [] };
+        cells[c].monsters.push(m);
+      });
+      (w.players || []).forEach(p => {
+        const c = p.cell || '?';
+        cells[c] = cells[c] || { monsters: [], players: [] };
+        cells[c].players.push(p);
+      });
+
+      const cellNames = Object.keys(cells);
+      if (cellNames.length === 0) {
+        worldEl.innerHTML = '<div class="live-placeholder muted">No monsters or players visible in this room.</div>';
+      } else {
+        worldEl.innerHTML = cellNames.map(c => {
+          const monsters = cells[c].monsters.map(m =>
+            `<div class="world-entity monster ${m.alive ? '' : 'dead'}">
+               <span class="ent-name">${esc(m.name)}</span>
+               <span class="ent-hp">${m.hp}/${m.max_hp}</span>
+               <span class="mini-bar"><span class="mini-fill" style="width:${m.hp_pct}%"></span></span>
+             </div>`).join('');
+          const players = cells[c].players.map(p =>
+            `<div class="world-entity player">
+               <span class="ent-name">${esc(p.name)}${p.afk ? ' (AFK)' : ''}</span>
+               <span class="ent-hp">Lv ${p.level} · ${p.hp}/${p.max_hp}</span>
+             </div>`).join('');
+          const meInCell = (w.cell === c) ? '<div class="world-entity you"><span class="ent-name">You</span></div>' : '';
+          return `<div class="world-cell">
+                    <div class="cell-title">Cell ${esc(c)}</div>
+                    ${meInCell}${monsters}${players}
+                  </div>`;
+        }).join('');
+      }
+
+      // Room side list (monsters only)
+      roomListEl.innerHTML = (w.monsters || []).length
+        ? (w.monsters || []).map(m =>
+            `<div class="item-row"><span>${esc(m.name)}</span><span class="qty">${m.alive ? m.hp + '/' + m.max_hp : 'dead'}</span></div>`).join('')
+        : '<div class="muted">No monsters.</div>';
+    }).catch(() => {});
+  }
+
   // --- polling loops ---
   function waitForApi(attempts) {
     const api = pyApi();
@@ -285,11 +368,13 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshModules(savedBotPath);
     updateRuffleStatus();
     updateBotStatus();
+    updateLiveView();
 
     // periodic status + log drain
     setInterval(() => {
       updateRuffleStatus();
       updateBotStatus();
+      updateLiveView();
       api.bot_logs().then(lines => lines.forEach(l => {
         if (l.trim()) log(l.trim());
       })).catch(() => {});

@@ -172,6 +172,9 @@ class Api:
     def bot_quests(self) -> list[dict]:
         return self._bot.quests()
 
+    def bot_world(self) -> dict:
+        return self._bot.world()
+
     def bot_modules(self) -> list[dict]:
         return self._bot.list_bot_modules()
 

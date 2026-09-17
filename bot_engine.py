@@ -237,8 +237,8 @@ class BotController:
             "gold": p.GOLD,
             "gold_farmed": p.GOLDFARMED,
             "exp_farmed": p.EXPFARMED,
-            "hp": p.CURRENT_HP,
-            "max_hp": p.MAX_HP,
+            "hp": max(0, min(int(p.CURRENT_HP), max(int(p.MAX_HP), 1))),
+            "max_hp": max(int(p.MAX_HP), 1),
             "mp": p.MANA,
             "max_mp": p.MAX_MP,
             "is_dead": bool(p.ISDEAD),
@@ -305,6 +305,55 @@ class BotController:
                 }
             )
         return out
+
+    def world(self) -> dict:
+        """Structured snapshot of the current room for a live visualization."""
+        if self.bot is None:
+            return {"map": "", "cell": "", "pad": "", "players": [], "monsters": []}
+
+        me = self.bot.player
+        my_cell = me.CELL or ""
+
+        monsters = []
+        for m in getattr(self.bot, "monsters", []):
+            max_hp = max(int(m.max_hp), 1)
+            cur_hp = max(0, int(m.current_hp))
+            monsters.append(
+                {
+                    "name": m.mon_name or ("id." + str(m.mon_map_id)),
+                    "hp": cur_hp,
+                    "max_hp": max_hp,
+                    "hp_pct": round(100 * cur_hp / max_hp),
+                    "alive": bool(m.is_alive),
+                    "cell": m.frame or "",
+                }
+            )
+
+        players = []
+        for pa in getattr(self.bot, "player_in_area", []):
+            if pa.str_username and pa.str_username.lower() == (me.USER or "").lower():
+                continue  # the local player is handled separately
+            max_hp = max(int(pa.int_hp_max), 1)
+            cur_hp = max(0, int(pa.int_hp))
+            players.append(
+                {
+                    "name": pa.str_username,
+                    "level": pa.int_level,
+                    "hp": cur_hp,
+                    "max_hp": max_hp,
+                    "hp_pct": round(100 * cur_hp / max_hp) if max_hp else 0,
+                    "cell": pa.str_frame or "",
+                    "afk": bool(pa.afk),
+                }
+            )
+
+        return {
+            "map": getattr(self.bot, "strMapName", "") or "",
+            "cell": my_cell,
+            "pad": me.PAD or "",
+            "players": players,
+            "monsters": monsters,
+        }
 
     # ---- module discovery ---------------------------------------------------
     def list_bot_modules(self) -> list[dict]:
