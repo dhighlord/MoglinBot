@@ -16,6 +16,7 @@ import socket
 import subprocess
 import sys
 import threading
+import traceback
 from typing import Any
 
 import webview
@@ -360,7 +361,64 @@ def _icon_path() -> str | None:
     return None
 
 
+def _crash_log_path() -> str:
+    """Return a writable log file path for uncaught exceptions.
+
+    In a PyInstaller ``--noconsole`` build, stderr is discarded, so startup
+    errors vanish silently. We write them to ``MoglinBot_crash.log`` next to the
+    executable (or in the user's home dir if that's not writable).
+    """
+    if getattr(sys, "frozen", False):
+        base = os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        base = _ROOT
+    candidate = os.path.join(base, "MoglinBot_crash.log")
+    try:
+        with open(candidate, "a", encoding="utf-8"):
+            pass
+        return candidate
+    except OSError:
+        return os.path.join(os.path.expanduser("~"), "MoglinBot_crash.log")
+
+
+def _log_exception(exc: BaseException) -> None:
+    """Append an exception + traceback to the crash log."""
+    path = _crash_log_path()
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write("\n" + "=" * 60 + "\n")
+            fh.write(f"[{__import__('datetime').datetime.now()}] Uncaught exception:\n")
+            fh.write("".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+            fh.write("=" * 60 + "\n")
+    except OSError:
+        pass
+
+
+def _check_windows_webview2() -> None:
+    """Fail loudly if the Edge WebView2 runtime is missing on Windows.
+
+    pywebview's Windows backend (EdgeChromium) requires the WebView2 runtime,
+    which is absent on some systems. Without a console, the failure is silent,
+    so we detect it up front and raise a clear error.
+    """
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        # WebView2Loader.dll is shipped with pywebview; its absence or an
+        # inability to find the runtime surfaces as an OSError on import/init.
+        import webview.platforms.edgechromium  # noqa: F401
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            "Edge WebView2 runtime is required but could not be loaded. "
+            "Install it from https://developer.microsoft.com/microsoft-edge/webview2/ "
+            f"(detail: {exc})"
+        ) from exc
+
+
 def main() -> None:
+    _check_windows_webview2()
+
     api = Api()
 
     # Start the WS<->TCP relay so the game's socket can reach AQW servers.
@@ -385,4 +443,28 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except BaseException as exc:  # noqa: BLE001
+        _log_exception(exc)
+        # Surface the error to the user in a way that works headless (frozen)
+        # without a console: show a native message box if possible, else re-raise.
+        try:
+            if getattr(sys, "frozen", False) and os.name == "nt":
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(
+                    0,
+                    "Moglin Bot failed to start.\n\n"
+                    f"{type(exc).__name__}: {exc}\n\n"
+                    f"Details logged to:\n{_crash_log_path()}",
+                    "Moglin Bot Error",
+                    0x10,  # MB_ICONERROR
+                )
+            else:
+                print(f"Fatal error: {exc}", file=sys.stderr)
+                traceback.print_exc()
+        except Exception:
+            pass
+        raise
