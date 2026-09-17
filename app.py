@@ -490,7 +490,6 @@ def main() -> None:
         min_size=(960, 640),
         resizable=True,
         focus=True,
-        on_top=False,
     )
     _trace("window created")
     api.set_window(window)
@@ -498,27 +497,58 @@ def main() -> None:
 
     icon = _icon_path()
     _trace(f"icon = {icon}")
+
+    # ---- backend selection (Windows) ---------------------------------------
+    # EdgeChromium depends on pythonnet/.NET/WebView2 interop, which is fragile
+    # under PyInstaller onefile and can block webview.start() with no window and
+    # no error. Prefer the self-contained Qt backend when available.
+    gui = None
+    if os.name == "nt":
+        try:
+            import PyQt5  # noqa: F401
+            gui = "qt"
+            _trace("backend: using qt (PyQt5 detected)")
+        except ImportError:
+            gui = "edgechromium"
+            _trace("backend: PyQt5 missing, using edgechromium")
+
     _trace("calling webview.start() ...")
 
-    # On Windows, if the WebView2 window fails to materialize after a while,
-    # the GUI loop still blocks forever with no visible window. Use a watchdog
-    # that surfaces an error if the first window hasn't shown in time.
+    # Watchdog: if no window shows within 15s on Windows, raise a visible error
+    # instead of blocking forever with no feedback.
     if os.name == "nt":
         def _watchdog():
             import time as _time
-            _time.sleep(12)
+            _time.sleep(15)
             try:
-                # If we can't find a visible window, report it.
-                windows = getattr(webview, "windows", [])
-                shown = any(getattr(w, "shown", None) is not None and w.shown.wait(0) if hasattr(w, "shown") and hasattr(w.shown, "wait") else True for w in windows)
-                _trace(f"watchdog: {len(windows)} window(s), shown={shown}")
-                if windows and not shown:
-                    _trace("watchdog: window did not show within 12s — likely WebView2 render failure")
+                import webview as _wv
+                shown = False
+                for w in _wv.windows:
+                    try:
+                        if w.events.shown.is_set():
+                            shown = True
+                            break
+                    except Exception:
+                        continue
+                _trace(f"watchdog: {len(_wv.windows)} window(s), shown={shown}")
+                if _wv.windows and not shown:
+                    _trace("watchdog: window failed to show — forcing exit")
+                    import ctypes as _ctypes
+                    _ctypes.windll.user32.MessageBoxW(
+                        0,
+                        "Moglin Bot could not open its window.\n\n"
+                        "The GUI backend failed to initialize. Please install the "
+                        "Microsoft Edge WebView2 runtime or report this log.",
+                        "Moglin Bot",
+                        0x10,
+                    )
+                    import os as _os
+                    _os._exit(3)
             except Exception as exc:  # noqa: BLE001
                 _trace(f"watchdog error: {exc}")
         threading.Thread(target=_watchdog, daemon=True).start()
 
-    webview.start(debug=False, icon=icon)
+    webview.start(debug=False, icon=icon, gui=gui)
     _trace("webview.start() returned")
 
 

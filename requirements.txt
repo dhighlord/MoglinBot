@@ -3,3 +3,8 @@ bottle>=0.12.25
 requests>=2.32
 colorama>=0.4.6
 websockets>=12.0
+# Solid Windows GUI backend: pywebview's EdgeChromium backend depends on a
+# fragile pythonnet/.NET/WebView2 chain that can block silently in PyInstaller
+# onefile. QtWebEngine is self-contained and bundles reliably.
+PyQt5>=5.15.10; platform_system == "Windows"
+PyQtWebEngine>=5.15.6; platform_system == "Windows"

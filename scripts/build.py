@@ -133,6 +133,14 @@ def build(platform: str, onefile: bool) -> int:
         "--collect-submodules", "model",
         "--collect-submodules", "abstracts",
     ]
+    if platform == "windows":
+        # Prefer the self-contained Qt backend over the fragile
+        # pythonnet/.NET/WebView2 EdgeChromium chain in PyInstaller onefile.
+        cmd += [
+            "--collect-all", "PyQt5",
+            "--collect-all", "PyQtWebEngine",
+            "--collect-all", "qtpy",
+        ]
     if add_flash:
         cmd += ["--add-data", add_flash]
     if onefile:

@@ -69,7 +69,9 @@ venv\Scripts\python app.py      # Windows
 
 ### System requirements
 
-- **Windows 10/11**: Edge WebView2 runtime (bundled with Windows, or install it).
+- **Windows 10/11**: PyQt5 is installed automatically as a dependency and
+  bundled into the executable (the self-contained QtWebEngine backend). The
+  Edge WebView2 runtime is only needed as a fallback.
 - **Linux**: GTK 3 + WebKit2GTK (pywebview's backend). On Debian/Ubuntu:
   ```bash
   sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1
