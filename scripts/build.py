@@ -125,6 +125,7 @@ def build(platform: str, onefile: bool) -> int:
         "--paths", AQW_PYTHON_DIR,
         "--hidden-import", "requests",
         "--hidden-import", "colorama",
+        "--hidden-import", "websockets",
         "--collect-submodules", "core",
         "--collect-submodules", "commands",
         "--collect-submodules", "templates",
