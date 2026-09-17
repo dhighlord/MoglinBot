@@ -26,7 +26,12 @@ import logging
 
 import websockets
 
+# The relay runs inside the GUI process; keep its messages out of the visible
+# bot log unless something is actually wrong.
+logging.getLogger("websockets").setLevel(logging.WARNING)
+
 log = logging.getLogger("relay")
+log.setLevel(logging.WARNING)
 
 # Ruffle's socketProxy routes every Socket.connect() for a matching (host,port)
 # to a WebSocket URL. The WS URL path carries the destination host/port so a
@@ -52,7 +57,9 @@ class TcpWsRelay:
             host = (params.get("host") or [""])[0]
             port = int((params.get("port") or ["0"])[0])
         if not host or not port:
-            log.warning("Missing host/port in query; closing.")
+            # No destination in the query — likely a connectivity probe or a
+            # client that forgot its parameters. Close quietly; not an error.
+            log.debug("WS client connected without host/port; closing.")
             await ws.close()
             return
 

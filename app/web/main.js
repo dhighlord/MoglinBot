@@ -305,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const api = pyApi();
         if (api) api.game_loaded();
         log('Game loaded in Ruffle.', 'success');
-        updateStatusMsg('Game loaded. Waiting for login screen...');
+        updateStatusMsg('Game loaded. If the screen is black, use "Open in Flash" above for the proven renderer.');
       };
       // rbot.swf asks JS for the game URL once its Externalizer is ready.
       // Respond by telling rbot.swf to load the default game client.
