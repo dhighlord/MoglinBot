@@ -435,6 +435,34 @@ def _check_windows_webview2() -> None:
             f"(detail: {exc})"
         ) from exc
 
+    # Check the WebView2 runtime is actually installed (not just the Python shim).
+    _trace("webview2 check: probing runtime registry...")
+    import winreg
+    found = False
+    for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+        for sub in (
+            r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+            r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        ):
+            try:
+                with winreg.OpenKey(root, sub) as k:
+                    val, _ = winreg.QueryValueEx(k, "pv")
+                    _trace(f"webview2 runtime found: {val}")
+                    found = True
+                    break
+            except OSError:
+                continue
+        if found:
+            break
+    if not found:
+        _trace("webview2 runtime NOT FOUND in registry")
+        raise RuntimeError(
+            "The Microsoft Edge WebView2 runtime is not installed. "
+            "Download and install it from:\n"
+            "https://developer.microsoft.com/microsoft-edge/webview2/"
+        )
+    _trace("webview2 check passed")
+
 
 def main() -> None:
     _trace("app.main() entered")
@@ -461,6 +489,8 @@ def main() -> None:
         height=800,
         min_size=(960, 640),
         resizable=True,
+        focus=True,
+        on_top=False,
     )
     _trace("window created")
     api.set_window(window)
@@ -469,6 +499,25 @@ def main() -> None:
     icon = _icon_path()
     _trace(f"icon = {icon}")
     _trace("calling webview.start() ...")
+
+    # On Windows, if the WebView2 window fails to materialize after a while,
+    # the GUI loop still blocks forever with no visible window. Use a watchdog
+    # that surfaces an error if the first window hasn't shown in time.
+    if os.name == "nt":
+        def _watchdog():
+            import time as _time
+            _time.sleep(12)
+            try:
+                # If we can't find a visible window, report it.
+                windows = getattr(webview, "windows", [])
+                shown = any(getattr(w, "shown", None) is not None and w.shown.wait(0) if hasattr(w, "shown") and hasattr(w.shown, "wait") else True for w in windows)
+                _trace(f"watchdog: {len(windows)} window(s), shown={shown}")
+                if windows and not shown:
+                    _trace("watchdog: window did not show within 12s — likely WebView2 render failure")
+            except Exception as exc:  # noqa: BLE001
+                _trace(f"watchdog error: {exc}")
+        threading.Thread(target=_watchdog, daemon=True).start()
+
     webview.start(debug=False, icon=icon)
     _trace("webview.start() returned")
 
