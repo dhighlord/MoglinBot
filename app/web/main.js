@@ -293,11 +293,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const api = pyApi();
         if (api) api.game_loaded();
         log('Game loaded in Ruffle.', 'success');
+        updateStatusMsg('Game loaded. Waiting for login screen...');
       };
       // rbot.swf asks JS for the game URL once its Externalizer is ready.
       // Respond by telling rbot.swf to load the default game client.
       window.requestLoadGame = () => {
         log('rbot.swf requested game load.');
+        updateStatusMsg('Loading AQW game client...');
         try {
           if (ru && ru.callExternalInterface) {
             ru.callExternalInterface('loadClient', null);
@@ -326,6 +328,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { return false; }
       };
 
+      // Update the status overlay message.
+      function updateStatusMsg(msg) {
+        const el = document.getElementById('game-status-msg');
+        if (el) el.textContent = msg;
+      }
+
       // Load rbot.swf (the rBot loader that loads the real game and registers
       // ExternalInterface callbacks like sendClientPacket / loadClient).
       const loadOptions = {
@@ -346,6 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // never registered. Explicitly resume/play to start frame execution.
         try { if (ru && typeof ru.resume === 'function') ru.resume(); } catch (e) {}
         try { if (player && typeof player.play === 'function') player.play(); } catch (e) {}
+        updateStatusMsg('Loading AQW game client...');
         // rbot.swf asks JS for the game URL via "requestLoadGame", but the
         // SWF->JS ExternalInterface direction may not fire under Ruffle. So we
         // proactively tell it to load the default game client once it's ready.
@@ -357,6 +366,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           } catch (e) { log('loadClient error: ' + e, 'error'); }
         }, 1500);
+        // Once the game signals it loaded, fade out the status overlay.
+        const statusChecker = setInterval(() => {
+          if (gameLoaded) {
+            const el = document.getElementById('game-status-msg');
+            if (el) {
+              el.style.transition = 'opacity 0.5s';
+              el.style.opacity = '0';
+              setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 600);
+            }
+            clearInterval(statusChecker);
+          }
+        }, 500);
       }).catch((e) => {
         log('rbot.swf load error: ' + e, 'error');
       });
