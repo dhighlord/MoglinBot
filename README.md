@@ -77,27 +77,55 @@ venv\Scripts\python app.py      # Windows
 
 ## Building standalone executables
 
+> **⚠️ PyInstaller cannot cross-compile.** A Windows `.exe` must be built **on
+> Windows**; a Linux binary must be built **on Linux**. The build script now
+> *refuses* `--platform windows` when run on Linux (and vice versa) rather than
+> silently producing a Linux ELF named `MoglinBot.exe` that Windows can't run.
+
 Place the Ruffle binary for the target platform in `vendor/ruffle/`, then build
-**on the target OS** (PyInstaller is not cross-compiling):
+**on the target OS**:
+
+### Windows (run on Windows)
+
+```powershell
+# 1. Install Python 3.9+ (check "Add to PATH") and Git, then clone:
+git clone <repo-url> MoglinBot
+cd MoglinBot
+
+# 2. Create the venv and install deps
+python -m venv venv
+venv\Scripts\pip install -r requirements.txt pyinstaller
+
+# 3. Build
+venv\Scripts\python scripts\build.py --platform windows --onefile
+```
+
+Output: `dist\MoglinBot.exe`. Copy that single file to any Windows 10/11
+machine (it bundles the webview assets, the aqw-python engine, Ruffle, and the
+Flash projector — no external dependencies beyond the built-in Edge WebView2
+runtime).
+
+### Linux (run on Linux)
 
 ```bash
-# Windows
-venv\Scripts\pip install pyinstaller
-venv\Scripts\python scripts/build.py --platform windows --onefile
-
-# Linux
-venv/bin/pip install pyinstaller
+python3 -m venv --system-site-packages venv
+venv/bin/pip install -r requirements.txt pyinstaller
 venv/bin/python scripts/build.py --platform linux --onefile
 ```
 
-The output lands in `dist/`. The Ruffle binary, the aqw-python engine, the
-frontend, and the icons are all bundled into the executable and extracted at
-runtime, so the standalone binary has no external dependencies.
+Output: `dist/MoglinBot` (an ELF binary).
+
+The Ruffle binary, the aqw-python engine, the frontend, and the icons are all
+bundled into the executable and extracted at runtime, so the standalone binary
+has no external dependencies.
 
 ## Notes
 
 - **Verified**: Ruffle `0.6.0-stable` loads AQW `Loader3.swf` and reaches the
   title screen; the TCP socket flag is enabled.
+- **Flash fallback**: Ruffle's AQW title-screen rendering can be incomplete on
+  some hardware. Use **Open in Flash** to run the game in the bundled Adobe
+  Flash 32 projector (rBot's original runtime), which is the proven AQW renderer.
 - The engine reuses the fully-working aqw-python `Bot`/`Command` API (questing,
   combat, inventory, bank, navigation, drop whitelist, auto-relogin, anti-mod).
 
