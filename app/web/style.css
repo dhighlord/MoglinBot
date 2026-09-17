@@ -85,18 +85,6 @@ html, body {
 .dot.ok { background: var(--success); }
 .dot.bad { background: var(--danger); }
 
-.sidebar-credit {
-  padding: 10px 8px 0;
-  font-size: 12px;
-  text-align: center;
-}
-.sidebar-credit a {
-  color: var(--muted);
-  text-decoration: none;
-  letter-spacing: 0.3px;
-}
-.sidebar-credit a:hover { color: var(--primary); }
-
 /* Main */
 .content { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .header {
@@ -137,67 +125,80 @@ html, body {
 .tab { display: none; flex: 1; overflow: auto; padding: 28px; }
 .tab.active { display: block; }
 
-/* Game tab */
-.game-hero {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 60vh;
-}
-.hero-card {
-  max-width: 560px;
-  text-align: center;
-  padding: 40px;
+/* Cards & forms */
+.card {
+  padding: 22px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  margin-bottom: 18px;
 }
-.hero-icon { width: 56px; height: 56px; color: var(--primary); margin-bottom: 18px; }
-.hero-card h2 { font-size: 24px; font-weight: 700; margin-bottom: 12px; }
-.muted { color: var(--muted); }
-.hero-card p { line-height: 1.6; font-size: 14px; }
-.hero-actions { margin-top: 24px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.hint { font-size: 12px; color: var(--muted); word-break: break-all; }
+.card h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+.muted { color: var(--muted); font-size: 13px; }
 
-.game-statusbar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 18px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  margin-top: 18px;
+.trainer-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 18px;
 }
-.status-pill { font-weight: 600; font-size: 13px; }
-.status-pill.running { color: var(--success); }
+@media (max-width: 900px) {
+  .trainer-layout { grid-template-columns: 1fr; }
+}
 
-/* Placeholder cards */
-.placeholder-card {
-  max-width: 720px;
-  padding: 32px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.placeholder-card h2 { font-size: 20px; margin-bottom: 10px; }
-.placeholder-card p { line-height: 1.6; font-size: 14px; margin-bottom: 20px; }
-.placeholder-card code {
-  background: var(--panel-2);
-  padding: 2px 6px;
-  border-radius: 5px;
-  font-size: 13px;
-  color: var(--primary);
-}
-.feature-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.feature {
-  padding: 12px 14px;
+.form-row { margin-bottom: 12px; }
+.form-row label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+.form-row input, .form-row select, .script-row select {
+  width: 100%;
+  padding: 10px 12px;
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: 8px;
-  font-size: 13px;
   color: var(--text);
+  font-size: 14px;
 }
+.form-row input:focus, .form-row select:focus, .script-row select:focus {
+  outline: none; border-color: var(--primary);
+}
+.form-row.split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.trainer-actions { display: flex; gap: 10px; margin-top: 14px; }
+
+.status-line { margin-top: 12px; font-size: 13px; color: var(--muted); }
+.status-line.ok { color: var(--success); }
+.status-line.warn { color: #f59e0b; }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.stat {
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.stat .k { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+.stat .v { font-size: 15px; font-weight: 600; }
+
+.item-list {
+  max-height: 260px;
+  overflow: auto;
+}
+.item-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.item-row:last-child { border-bottom: none; }
+.item-row .qty { color: var(--muted); }
+
+.script-row { display: flex; gap: 10px; margin-bottom: 14px; }
+.script-row select { flex: 1; }
 
 /* Logs */
 .logs { display: flex; flex-direction: column; height: 100%; }

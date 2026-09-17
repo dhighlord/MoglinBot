@@ -7,15 +7,13 @@ Usage:
 The build bundles:
   - the Python app (pywebview + Bottle frontend server)
   - the ``app/web`` frontend assets
+  - the aqw-python automation engine (``../aqw-python``)
   - the Ruffle Flash-emulator binary for the target platform (``vendor/ruffle``)
+  - the application icon
 
-The bundled Ruffle binary is what renders the real AQW game client, since Adobe
-Flash is end-of-life. Only the binary matching the *target* platform is shipped
-(``ruffle.exe`` on Windows, ``ruffle`` on Linux/macOS).
-
-At runtime, the Ruffle binary is extracted into PyInstaller's ``sys._MEIPASS``
-temporary directory and located by ``ruffle_launcher.candidate_locations()``,
-so the standalone executable has **no external dependency** on ``vendor/ruffle``.
+At runtime, the Ruffle binary and the aqw-python engine are extracted into
+PyInstaller's ``sys._MEIPASS`` temporary directory and located by the app, so
+the standalone executable has **no external dependency** on the source tree.
 """
 
 from __future__ import annotations
@@ -31,6 +29,9 @@ WEB_DIR = os.path.join(ROOT, "app", "web")
 VENDOR_DIR = os.path.join(ROOT, "vendor", "ruffle")
 ENTRYPOINT = os.path.join(ROOT, "app.py")
 APP_NAME = "MoglinBot"
+
+# The aqw-python engine lives one level up in the repo (dev layout).
+AQW_PYTHON_DIR = os.path.join(os.path.dirname(ROOT), "aqw-python")
 
 
 def ruffle_binary_for(platform: str) -> str:
@@ -49,13 +50,22 @@ def build(platform: str, onefile: bool) -> int:
         print("       and place it in vendor/ruffle/")
         return 1
 
+    if not os.path.isdir(AQW_PYTHON_DIR):
+        print(f"ERROR: aqw-python engine not found at {AQW_PYTHON_DIR}")
+        return 1
+
     # PyInstaller data spec (POSIX uses ':', Windows uses ';').
     sep = ";" if os.name == "nt" else ":"
-    # Frontend assets -> extracted under "web/" in _MEIPASS.
     add_web = f"app/web{sep}web"
-    # Ruffle binary -> extracted at the _MEIPASS root (named ruffle / ruffle.exe),
-    # which `ruffle_launcher.candidate_locations()` finds as "bundle (_MEIPASS)".
+    # Ruffle binary -> extracted at the _MEIPASS root.
     add_ruffle = f"{ruffle_path}{sep}."
+    # aqw-python engine -> extracted under "aqw_python/" in _MEIPASS.
+    add_engine = f"{AQW_PYTHON_DIR}{sep}aqw_python"
+    # Icons -> extracted at the _MEIPASS root.
+    ico = os.path.join(ROOT, "MoglinBot.ico")
+    png = os.path.join(ROOT, "MoglinBot1024.png")
+    add_ico = f"{ico}{sep}."
+    add_png = f"{png}{sep}."
 
     cmd = [
         sys.executable, "-m", "PyInstaller",
@@ -64,7 +74,16 @@ def build(platform: str, onefile: bool) -> int:
         "--clean",
         "--add-data", add_web,
         "--add-data", add_ruffle,
+        "--add-data", add_engine,
+        "--add-data", add_ico,
+        "--add-data", add_png,
         "--paths", ROOT,
+        "--collect-submodules", "core",
+        "--collect-submodules", "commands",
+        "--collect-submodules", "templates",
+        "--collect-submodules", "handlers",
+        "--collect-submodules", "model",
+        "--collect-submodules", "abstracts",
     ]
     if onefile:
         cmd.append("--onefile")
@@ -74,6 +93,12 @@ def build(platform: str, onefile: bool) -> int:
         cmd.append("--windowed")
     if platform == "windows":
         cmd.append("--noconsole")
+
+    # Windows app icon (embedded in the exe); Linux/macOS use the PNG via webview.
+    if platform == "windows":
+        cmd.append(f"--icon={ico}")
+    else:
+        cmd.append(f"--icon={png}")
 
     cmd.append(ENTRYPOINT)
 

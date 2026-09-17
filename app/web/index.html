@@ -24,16 +24,7 @@
       </div>
 
       <nav class="nav">
-        <button class="nav-btn active" data-tab="game">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
-            <rect x="2" y="6" width="20" height="12" rx="2"></rect>
-            <path d="M6 12h4m-2-2v4"></path>
-            <circle cx="16" cy="12" r="1.5"></circle>
-            <circle cx="19" cy="9" r="0.5"></circle>
-          </svg>
-          Game
-        </button>
-        <button class="nav-btn" data-tab="trainer">
+        <button class="nav-btn active" data-tab="trainer">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
             <path d="M12 20V10M18 20V4M6 20v-4"></path>
           </svg>
@@ -61,17 +52,14 @@
         <span class="dot" id="ruffle-dot"></span>
         <span id="ruffle-status">Checking...</span>
       </div>
-      <div class="sidebar-credit">
-        <a href="https://www.epicalyx.org" target="_blank" rel="noopener">Epicalyx</a>
-      </div>
     </aside>
 
     <!-- Main -->
     <main class="content">
       <header class="header">
         <div class="header-title">
-          <h1 id="tab-title">Game</h1>
-          <p id="tab-subtitle">Launch AQW</p>
+          <h1 id="tab-title">Trainer</h1>
+          <p id="tab-subtitle"></p>
         </div>
         <div class="header-controls" id="game-controls">
           <button class="btn btn-primary" id="btn-launch">
@@ -89,49 +77,109 @@
         </div>
       </header>
 
-      <!-- Game tab -->
-      <section class="tab active" id="tab-game">
-        <div class="game-hero" id="game-hero">
-          <div class="hero-card">
-            <svg class="hero-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <rect x="2" y="4" width="20" height="16" rx="3"></rect>
-              <path d="M7 15l4-4 3 3 4-5"></path>
-            </svg>
-            <h2>AdventureQuest Worlds</h2>
-            <div class="hero-actions">
-              <button class="btn btn-primary btn-lg" id="btn-launch-2">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
-                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                </svg>
-                Launch AQW
-              </button>
+      <!-- Trainer tab -->
+      <section class="tab active" id="tab-trainer">
+        <div class="trainer-layout">
+          <!-- Account / session config -->
+          <div class="card">
+            <h3>Account</h3>
+            <div class="form-row">
+              <label>Username</label>
+              <input type="text" id="input-username" placeholder="AQW username">
+            </div>
+            <div class="form-row">
+              <label>Password</label>
+              <input type="password" id="input-password" placeholder="AQW password">
+            </div>
+            <div class="form-row split">
+              <div>
+                <label>Server</label>
+                <select id="select-server">
+                  <option value="Artix">Artix</option>
+                  <option value="Twilly">Twilly</option>
+                  <option value="Twig">Twig</option>
+                  <option value="Sepulchure">Sepulchure</option>
+                  <option value="Gravelyn">Gravelyn</option>
+                  <option value="Safiria">Safiria</option>
+                  <option value="Sir Ver">Sir Ver</option>
+                  <option value="Swordhaven (EU)">Swordhaven (EU)</option>
+                  <option value="Galanoth">Galanoth</option>
+                  <option value="Alteon">Alteon</option>
+                  <option value="Yorumi">Yorumi</option>
+                  <option value="Yokai (SEA)">Yokai (SEA)</option>
+                  <option value="Espada">Espada</option>
+                </select>
+              </div>
+              <div>
+                <label>Room #</label>
+                <input type="number" id="input-room" value="1" min="1">
+              </div>
+            </div>
+            <div class="form-row split">
+              <div>
+                <label>Farm Class</label>
+                <input type="text" id="input-farm-class" placeholder="e.g. Legion Revenant">
+              </div>
+              <div>
+                <label>Solo Class</label>
+                <input type="text" id="input-solo-class" placeholder="e.g. Void Highlord">
+              </div>
+            </div>
+            <div class="trainer-actions">
+              <button class="btn btn-primary" id="btn-bot-start">Start Bot</button>
+              <button class="btn btn-danger hidden" id="btn-bot-stop">Stop Bot</button>
+            </div>
+            <div class="status-line" id="bot-conn-state">Not connected</div>
+          </div>
+
+          <!-- Live stats -->
+          <div class="card">
+            <h3>Player</h3>
+            <div class="stats-grid">
+              <div class="stat"><span class="k">HP</span><span class="v" id="stat-hp">-</span></div>
+              <div class="stat"><span class="k">Mana</span><span class="v" id="stat-mp">-</span></div>
+              <div class="stat"><span class="k">Gold</span><span class="v" id="stat-gold">-</span></div>
+              <div class="stat"><span class="k">Gold Farmed</span><span class="v" id="stat-gold-farmed">-</span></div>
+              <div class="stat"><span class="k">EXP Farmed</span><span class="v" id="stat-exp-farmed">-</span></div>
+              <div class="stat"><span class="k">State</span><span class="v" id="stat-state">-</span></div>
+            </div>
+            <div class="stats-grid">
+              <div class="stat"><span class="k">Map</span><span class="v" id="stat-map">-</span></div>
+              <div class="stat"><span class="k">Cell / Pad</span><span class="v" id="stat-cell-pad">-</span></div>
+              <div class="stat"><span class="k">Inventory</span><span class="v" id="stat-inv">-</span></div>
+              <div class="stat"><span class="k">Bank</span><span class="v" id="stat-bank">-</span></div>
+              <div class="stat"><span class="k">Monsters</span><span class="v" id="stat-mons">-</span></div>
+              <div class="stat"><span class="k">Quests</span><span class="v" id="stat-quests">-</span></div>
             </div>
           </div>
         </div>
-        <div class="game-statusbar hidden" id="game-statusbar">
-          <span class="status-pill running" id="game-running-pill">● Game running</span>
-        </div>
-      </section>
 
-      <!-- Trainer tab (placeholder) -->
-      <section class="tab" id="tab-trainer">
-        <div class="placeholder-card">
-          <h2>Trainer &amp; Bot Features</h2>
-          <div class="feature-grid">
-            <div class="feature">Combat / skill rotation</div>
-            <div class="feature">Quest accept &amp; turn-in</div>
-            <div class="feature">Inventory &amp; bank manager</div>
-            <div class="feature">Map navigation</div>
-            <div class="feature">Drop whitelist</div>
-            <div class="feature">Auto-relogin &amp; anti-mod</div>
+        <!-- Inventory / Bank -->
+        <div class="trainer-layout">
+          <div class="card">
+            <h3>Inventory</h3>
+            <div class="item-list" id="inventory-list"></div>
+          </div>
+          <div class="card">
+            <h3>Bank</h3>
+            <div class="item-list" id="bank-list"></div>
           </div>
         </div>
       </section>
 
-      <!-- Scripts tab (placeholder) -->
+      <!-- Scripts tab -->
       <section class="tab" id="tab-scripts">
-        <div class="placeholder-card">
-          <h2>Scripting</h2>
+        <div class="card">
+          <h3>Bot Script</h3>
+          <p class="muted">Select a scriptable bot module from the aqw-python engine.</p>
+          <div class="script-row">
+            <select id="select-bot-module"></select>
+            <button class="btn btn-outline" id="btn-refresh-modules">Refresh</button>
+          </div>
+          <div class="trainer-actions">
+            <button class="btn btn-primary" id="btn-script-start">Run Script</button>
+          </div>
+          <p class="muted" id="script-hint">Scripts run with the account details from the Trainer tab.</p>
         </div>
       </section>
 
