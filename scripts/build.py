@@ -110,6 +110,11 @@ def build(platform: str, onefile: bool) -> int:
     flash_name = flash_binary_for(platform)
     flash_path = os.path.join(ROOT, "vendor", "flash", flash_name)
     add_flash = f"{flash_path}{sep}flash" if os.path.isfile(flash_path) else None
+    # moglin.swf (in-game GUI wrapper) sits next to the projector.
+    moglin_path = os.path.join(ROOT, "vendor", "flash", "moglin.swf")
+    add_moglin = (
+        f"{moglin_path}{sep}flash" if os.path.isfile(moglin_path) else None
+    )
 
     cmd = [
         sys.executable, "-m", "PyInstaller",
@@ -143,6 +148,8 @@ def build(platform: str, onefile: bool) -> int:
         ]
     if add_flash:
         cmd += ["--add-data", add_flash]
+    if add_moglin:
+        cmd += ["--add-data", add_moglin]
     if onefile:
         cmd.append("--onefile")
     else:

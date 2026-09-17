@@ -173,10 +173,58 @@ class Api:
         self._log_bus = LogBus()
         self._live = LiveClient()
         self._bot = LiveBotController(self._log_bus, self._live)
+        self._control: Any = None
         # Redirect stdout/stderr so the aqw-python engine's print() output is
         # captured and streamed to the GUI console.
         sys.stdout = self._log_bus
         sys.stderr = self._log_bus
+
+    def start_control_server(self) -> None:
+        """Start the TCP control channel for the in-game moglin.swf GUI."""
+        if self._control is not None:
+            return
+        from control_server import ControlServer
+
+        self._control = ControlServer("127.0.0.1", 5587)
+
+        def on_event(kind: str, msg: dict) -> None:
+            if kind == "hello":
+                self._live.mark_game_loaded()
+                self._log_bus.queue.put("In-game GUI connected.\n")
+            elif kind == "botStart":
+                self._log_bus.queue.put("In-game Start Bot clicked.\n")
+            elif kind == "botStop":
+                self._log_bus.queue.put("In-game Stop Bot clicked.\n")
+
+        self._control.set_handlers(
+            on_packet=lambda pkt, ptype: self._live.on_packet(pkt),
+            on_event=on_event,
+        )
+        threading.Thread(
+            target=self._control.serve_forever, daemon=True, name="ctl-server"
+        ).start()
+
+        # Route bot packet injection through the control socket when the game
+        # window (Flash projector) is the active display.
+        self._live.set_eval_js(
+            lambda js: self._inject_via_control(js)
+        )
+
+    def _inject_via_control(self, js: str) -> bool:
+        """LiveClient eval_js hook: send packets through the control socket."""
+        if self._control is None:
+            return False
+        # js comes from LiveClient.send: "window.__moglin_sendPacket('pkt','str');"
+        import re
+
+        m = re.search(
+            r"__moglin_sendPacket\(\s*['\"](.*?)['\"]\s*,\s*['\"](.*?)['\"]\s*\)",
+            js,
+        )
+        if m:
+            packet, ptype = m.group(1), m.group(2)
+            return self._control.send_packet(packet, ptype)
+        return False
 
     def set_window(self, window: Any) -> None:
         self._window = window
@@ -258,6 +306,11 @@ class Api:
         if is_process_running(self._game_proc):
             return {"success": False, "error": "Game window is already open."}
         try:
+            # Use moglin.swf (in-game GUI wrapper) as the entry point so the
+            # game window includes bot controls and the control socket bridge.
+            swf_dir = os.path.dirname(flash)
+            moglin_swf = os.path.join(swf_dir, "moglin.swf")
+            target = moglin_swf if os.path.isfile(moglin_swf) else AQW_LOADER_URL
             kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
             if os.name == "nt":
                 kwargs["creationflags"] = (
@@ -265,7 +318,7 @@ class Api:
                 )
             else:
                 kwargs["start_new_session"] = True
-            self._game_proc = subprocess.Popen([flash, AQW_LOADER_URL], **kwargs)
+            self._game_proc = subprocess.Popen([flash, target], **kwargs)
             return {"success": True, "pid": self._game_proc.pid}
         except OSError as exc:
             return {"success": False, "error": f"Failed to start Flash: {exc}"}
@@ -475,6 +528,10 @@ def main() -> None:
 
     api = Api()
     _trace("Api() created")
+
+    # Start the TCP control channel for the in-game GUI (moglin.swf).
+    api.start_control_server()
+    _trace("control server started")
 
     # Start the WS<->TCP relay so the game's socket can reach AQW servers.
     _start_relay()
