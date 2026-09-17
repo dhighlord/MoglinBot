@@ -394,6 +394,23 @@ def _log_exception(exc: BaseException) -> None:
         pass
 
 
+def _trace(message: str) -> None:
+    """Append a step marker to the launcher log file (bypasses redirected stdout).
+
+    This is for diagnosing silent startup failures in --noconsole frozen builds.
+    """
+    try:
+        if getattr(sys, "frozen", False):
+            base = os.path.dirname(os.path.abspath(sys.executable))
+        else:
+            base = _ROOT
+        path = os.path.join(base, "MoglinBot_log.txt")
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(f"[{__import__('datetime').datetime.now()}] {message}\n")
+    except OSError:
+        pass
+
+
 def _check_windows_webview2() -> None:
     """Fail loudly if the Edge WebView2 runtime is missing on Windows.
 
@@ -403,12 +420,15 @@ def _check_windows_webview2() -> None:
     """
     if os.name != "nt":
         return
+    _trace("webview2 check: importing edgechromium backend...")
     try:
         import ctypes
         # WebView2Loader.dll is shipped with pywebview; its absence or an
         # inability to find the runtime surfaces as an OSError on import/init.
         import webview.platforms.edgechromium  # noqa: F401
+        _trace("webview2 check: edgechromium import OK")
     except Exception as exc:  # noqa: BLE001
+        _trace(f"webview2 check FAILED: {exc}")
         raise RuntimeError(
             "Edge WebView2 runtime is required but could not be loaded. "
             "Install it from https://developer.microsoft.com/microsoft-edge/webview2/ "
@@ -417,15 +437,21 @@ def _check_windows_webview2() -> None:
 
 
 def main() -> None:
+    _trace("app.main() entered")
     _check_windows_webview2()
+    _trace("webview2 check passed")
 
     api = Api()
+    _trace("Api() created")
 
     # Start the WS<->TCP relay so the game's socket can reach AQW servers.
     _start_relay()
+    _trace("relay started")
 
     web_dir = _web_dir()
+    _trace(f"web_dir = {web_dir}")
     url = _start_static_server(web_dir)
+    _trace(f"static server at {url}")
 
     window = webview.create_window(
         title=_WINDOW_TITLE,
@@ -436,10 +462,15 @@ def main() -> None:
         min_size=(960, 640),
         resizable=True,
     )
+    _trace("window created")
     api.set_window(window)
+    _trace("api.set_window done")
 
     icon = _icon_path()
+    _trace(f"icon = {icon}")
+    _trace("calling webview.start() ...")
     webview.start(debug=False, icon=icon)
+    _trace("webview.start() returned")
 
 
 if __name__ == "__main__":
