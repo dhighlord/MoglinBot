@@ -35,7 +35,7 @@ import platform as _platform
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB_DIR = os.path.join(ROOT, "app", "web")
 VENDOR_DIR = os.path.join(ROOT, "vendor", "ruffle")
-ENTRYPOINT = os.path.join(ROOT, "app.py")
+ENTRYPOINT = os.path.join(ROOT, "launcher.py")
 APP_NAME = "MoglinBot"
 
 # The aqw-python engine lives one level up in the repo (dev layout).
