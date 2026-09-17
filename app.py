@@ -93,14 +93,46 @@ def _free_port() -> int:
 
 
 def _start_static_server(web_dir: str) -> str:
-    """Serve the frontend from a local thread (avoids WebView file:// quirks)."""
-    from bottle import Bottle, static_file
+    """Serve the frontend from a local thread (avoids WebView file:// quirks).
+
+    Also proxies AQW game HTTP requests (game.aq.com) so the game client can
+    fetch its version/manifest from a same-origin URL (game.aq.com does not
+    send CORS headers, which blocks cross-origin fetches from the webview).
+    """
+    import requests as _requests
+    from bottle import Bottle, static_file, request as _request, response as _response
 
     app = Bottle()
 
     @app.route("/")
     def index():
         return static_file("index.html", root=web_dir)
+
+    # Proxy for the game's HTTP API. The game client requests
+    # https://game.aq.com/game/... — we rewrite to /proxy/game/... and relay.
+    @app.route("/proxy/<path:path>")
+    def proxy(path):
+        target = f"https://game.aq.com/{path}"
+        if _request.query_string:
+            target += "?" + _request.query_string
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "*/*",
+            }
+            if _request.method == "POST":
+                resp = _requests.post(
+                    target, data=_request.body.read(), headers=headers, timeout=30
+                )
+            else:
+                resp = _requests.get(target, headers=headers, timeout=30)
+            _response.status = resp.status_code
+            _response.content_type = resp.headers.get("Content-Type", "application/octet-stream")
+            _response.set_header("Access-Control-Allow-Origin", "*")
+            return resp.content
+        except Exception as exc:
+            _response.status = 502
+            return f"Proxy error: {exc}"
 
     @app.route("/<path:path>")
     def assets(path):

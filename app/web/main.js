@@ -286,12 +286,23 @@ document.addEventListener('DOMContentLoaded', () => {
       // rbot.swf forwards server packets + pext to JS via ExternalInterface.call.
       // Ruffle web resolves these as indirect eval of the *name* in global scope,
       // so we must define global functions named exactly "loaded", "pext",
-      // "packet", and "debug" (matching rbot.swf's Externalizer.call(...)).
+      // "packet", "debug", and "requestLoadGame" (matching rbot.swf's
+      // Externalizer.call(...)).
       window.loaded = () => {
         gameLoaded = true;
         const api = pyApi();
         if (api) api.game_loaded();
         log('Game loaded in Ruffle.', 'success');
+      };
+      // rbot.swf asks JS for the game URL once its Externalizer is ready.
+      // Respond by telling rbot.swf to load the default game client.
+      window.requestLoadGame = () => {
+        log('rbot.swf requested game load.');
+        try {
+          if (ru && ru.callExternalInterface) {
+            ru.callExternalInterface('loadClient', null);
+          }
+        } catch (e) { log('loadClient error: ' + e, 'error'); }
       };
       window.pext = (packet) => {
         const api = pyApi();
@@ -321,13 +332,26 @@ document.addEventListener('DOMContentLoaded', () => {
         url: 'rbot.swf',
         base: '.',
         allowScriptAccess: true,
-        // AQW's game uses flash.net.Socket; route it through our WS<->TCP relay.
-        socketProxy: [
-          { host: '*', port: 0, proxyUrl: 'ws://127.0.0.1:8088/?host=' },
+        allowNetworking: 'all',
+        // game.aq.com doesn't send CORS headers, so rewrite its HTTP requests
+        // through our same-origin proxy (see app.py /proxy/<path>).
+        urlRewriteRules: [
+          [new RegExp('^https?://game\\.aq\\.com/(.*)$'), '/proxy/$1'],
         ],
       };
       ru.load(loadOptions).then(() => {
         log('rbot.swf loaded; waiting for game...');
+        // rbot.swf asks JS for the game URL via "requestLoadGame", but the
+        // SWF->JS ExternalInterface direction may not fire under Ruffle. So we
+        // proactively tell it to load the default game client once it's ready.
+        setTimeout(() => {
+          try {
+            if (ru.callExternalInterface) {
+              ru.callExternalInterface('loadClient', null);
+              log('Sent loadClient to rbot.swf.');
+            }
+          } catch (e) { log('loadClient error: ' + e, 'error'); }
+        }, 1500);
       }).catch((e) => {
         log('rbot.swf load error: ' + e, 'error');
       });
