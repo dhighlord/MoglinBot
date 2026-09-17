@@ -183,6 +183,10 @@ class Api:
         # Route live-client JS calls through the webview.
         self._live.set_eval_js(lambda js: window.evaluate_js(js))
 
+    def set_eval_js(self, fn) -> None:
+        """Install a custom JS executor (used by the direct-Qt window)."""
+        self._live.set_eval_js(fn)
+
     # ---- live game client (called from the Ruffle embed in JS) -------------
     def game_loaded(self) -> dict:
         """JS signals the game has fully loaded in the Ruffle player."""
@@ -481,6 +485,20 @@ def main() -> None:
     url = _start_static_server(web_dir)
     _trace(f"static server at {url}")
 
+    icon = _icon_path()
+    _trace(f"icon = {icon}")
+
+    # ---- Windows: drive QtWebEngine directly (skip pywebview entirely) ------
+    # Both pywebview backends failed silently in the frozen build. The direct
+    # Qt path raises real exceptions (visible via the launcher) instead of
+    # hanging inside webview.start().
+    if os.name == "nt":
+        _trace("using direct QtWebEngine window")
+        import qt_window
+        qt_window.run_qt_window(url, api, _WINDOW_TITLE, icon)
+        _trace("qt window loop exited")
+        return
+
     window = webview.create_window(
         title=_WINDOW_TITLE,
         url=url,
@@ -495,60 +513,8 @@ def main() -> None:
     api.set_window(window)
     _trace("api.set_window done")
 
-    icon = _icon_path()
-    _trace(f"icon = {icon}")
-
-    # ---- backend selection (Windows) ---------------------------------------
-    # EdgeChromium depends on pythonnet/.NET/WebView2 interop, which is fragile
-    # under PyInstaller onefile and can block webview.start() with no window and
-    # no error. Prefer the self-contained Qt backend when available.
-    gui = None
-    if os.name == "nt":
-        try:
-            import PyQt5  # noqa: F401
-            gui = "qt"
-            _trace("backend: using qt (PyQt5 detected)")
-        except ImportError:
-            gui = "edgechromium"
-            _trace("backend: PyQt5 missing, using edgechromium")
-
     _trace("calling webview.start() ...")
-
-    # Watchdog: if no window shows within 15s on Windows, raise a visible error
-    # instead of blocking forever with no feedback.
-    if os.name == "nt":
-        def _watchdog():
-            import time as _time
-            _time.sleep(15)
-            try:
-                import webview as _wv
-                shown = False
-                for w in _wv.windows:
-                    try:
-                        if w.events.shown.is_set():
-                            shown = True
-                            break
-                    except Exception:
-                        continue
-                _trace(f"watchdog: {len(_wv.windows)} window(s), shown={shown}")
-                if _wv.windows and not shown:
-                    _trace("watchdog: window failed to show — forcing exit")
-                    import ctypes as _ctypes
-                    _ctypes.windll.user32.MessageBoxW(
-                        0,
-                        "Moglin Bot could not open its window.\n\n"
-                        "The GUI backend failed to initialize. Please install the "
-                        "Microsoft Edge WebView2 runtime or report this log.",
-                        "Moglin Bot",
-                        0x10,
-                    )
-                    import os as _os
-                    _os._exit(3)
-            except Exception as exc:  # noqa: BLE001
-                _trace(f"watchdog error: {exc}")
-        threading.Thread(target=_watchdog, daemon=True).start()
-
-    webview.start(debug=False, icon=icon, gui=gui)
+    webview.start(debug=False, icon=icon)
     _trace("webview.start() returned")
 
 
